@@ -32,6 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: SignageViewModel,
@@ -84,16 +85,110 @@ fun DashboardScreen(
         (billed - paid - clearedChecks).coerceAtLeast(0L)
     }
 
+    var showUserMenu by remember { mutableStateOf(false) }
+    val todayJalali = remember { JalaliDate.today().formatPersian() }
+    val currentUser by viewModel.currentUser.collectAsState()
+
     Scaffold(
         topBar = {
-            AppTopBar(
-                title = contractorInfo.businessName,
-                subtitle = "مدیریت سفارشات، پروژه‌ها و امور مالی",
-                actions = {
-                    IconButton(onClick = { onNavigateTo(Screen.Settings.route) }) {
-                        Icon(Icons.Default.Settings, contentDescription = "تنظیمات")
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = "امروز",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = todayJalali,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                }
+                },
+                actions = {
+                    // Notification bell for future announcements
+                    IconButton(onClick = { /* اعلان‌ها */ }) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "اعلان‌ها و پیام‌ها",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // User avatar and dropdown menu
+                    Box {
+                        IconButton(
+                            onClick = { showUserMenu = true },
+                            modifier = Modifier.testTag("dashboard_user_icon_btn")
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "پروفایل کاربر",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showUserMenu,
+                            onDismissRequest = { showUserMenu = false }
+                        ) {
+                            val userName = currentUser?.fullName?.ifBlank { contractorInfo.name } ?: contractorInfo.name
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = userName,
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            text = "مدیر کارگاه تابلوسازی",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                onClick = {},
+                                enabled = false
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("ویرایش مشخصات کاربر") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    showUserMenu = false
+                                    onNavigateTo(Screen.Settings.route)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("تنظیمات برنامه") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    showUserMenu = false
+                                    onNavigateTo(Screen.Settings.route)
+                                }
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { padding ->
@@ -239,50 +334,6 @@ fun DashboardScreen(
                 }
             }
 
-            // Recent Audit Logs / Activities
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "آخرین فعالیت‌ها و سوابق تغییرات",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "${recentAudits.size} رویداد",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (recentAudits.isEmpty()) {
-                item {
-                    AppCard {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "هنوز فعالیتی ثبت نشده است. با افزودن مشتری یا پروژه جدید شروع کنید.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            } else {
-                items(recentAudits.take(8)) { audit ->
-                    AuditLogItem(audit)
-                }
-            }
-
             item {
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -362,6 +413,23 @@ private fun AuditLogItem(audit: AuditLogEntity) {
                     text = "کاربر: ${audit.userId} • ساعت $timeString",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Dashboard Card Preview", showBackground = true)
+@Composable
+fun DashboardCardPreview() {
+    com.example.ui.theme.MyApplicationTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                QuickActionButton(
+                    title = "پروژه جدید",
+                    icon = Icons.Default.AddBusiness,
+                    color = com.example.ui.theme.PrimaryAmber,
+                    onClick = {}
                 )
             }
         }

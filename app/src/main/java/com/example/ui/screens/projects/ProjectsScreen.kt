@@ -171,7 +171,7 @@ fun ProjectsScreen(
 }
 
 @Composable
-private fun ProjectListItem(
+fun ProjectListItem(
     project: ProjectEntity,
     customerName: String,
     onClick: () -> Unit,
@@ -227,6 +227,29 @@ private fun ProjectListItem(
                     Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error)
                 }
             }
+        }
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Project Card Preview", showBackground = true)
+@Composable
+fun ProjectCardPreview() {
+    com.example.ui.theme.MyApplicationTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ProjectListItem(
+                project = ProjectEntity(
+                    id = "1",
+                    title = "تابلو چلنیوم داروخانه دکتر کریمی",
+                    customerId = "c1",
+                    startDate = "1403/08/10",
+                    status = "در حال ساخت",
+                    description = "طول ۵ متر با نور SMD آفتابی"
+                ),
+                customerName = "دکتر کریمی",
+                onClick = {},
+                onEdit = {},
+                onDelete = {}
+            )
         }
     }
 }

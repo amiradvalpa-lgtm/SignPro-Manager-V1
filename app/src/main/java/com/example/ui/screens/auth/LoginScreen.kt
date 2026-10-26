@@ -263,3 +263,32 @@ fun LoginScreen(
         )
     }
 }
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Login Card Preview", showBackground = true)
+@Composable
+fun LoginCardPreview() {
+    com.example.ui.theme.MyApplicationTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "تابلوسازی آلپا",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "سامانه جامع مدیریت کارگاه و پروژه‌ها",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}

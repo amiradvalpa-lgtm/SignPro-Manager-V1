@@ -42,6 +42,15 @@ class AppPreferences(private val context: Context) {
         // Auth
         val KEY_AUTH_ENABLED = booleanPreferencesKey("auth_enabled")
         val KEY_BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        val KEY_WARN_UNSAVED = booleanPreferencesKey("warn_unsaved_changes")
+    }
+
+    val warnUnsavedChanges: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_WARN_UNSAVED] ?: true
+    }
+
+    suspend fun setWarnUnsavedChanges(warn: Boolean) {
+        context.dataStore.edit { it[KEY_WARN_UNSAVED] = warn }
     }
 
     val currencyUnit: Flow<String> = context.dataStore.data.map { prefs ->

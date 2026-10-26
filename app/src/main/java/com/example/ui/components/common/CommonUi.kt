@@ -1,5 +1,6 @@
 package com.example.ui.components.common
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -8,10 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -169,7 +167,8 @@ fun CurrencyInputField(
                 rawText = if (parsed > 0) FormatUtils.formatNumber(parsed) else ""
                 onAmountChange(parsed)
             },
-            label = { Text("$label ($unitLabel)", style = MaterialTheme.typography.bodyMedium) },
+            label = { Text(label, style = MaterialTheme.typography.bodyMedium) },
+            placeholder = { Text("0", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) },
             trailingIcon = {
                 Text(
                     text = unitLabel,
@@ -268,6 +267,7 @@ fun DeleteConfirmationDialog(
     title: String = "تأیید حذف رکورد",
     message: String,
     itemDetail: String? = null,
+    confirmButtonText: String = "بله، حذف شود",
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -324,7 +324,7 @@ fun DeleteConfirmationDialog(
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("بله، حذف شود", fontWeight = FontWeight.Bold)
+                    Text(confirmButtonText, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -483,6 +483,302 @@ fun EmptyStateView(
             ) {
                 Text(actionButtonText, fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+/**
+ * استاندارد ۳.۱ سند توافقنامه: نوار ثابت دکمه‌های پایینی (Sticky Bottom Action Bar)
+ * - دکمه اصلی در سمت راست با عنوان «ذخیره + نام موجودیت» با عرض دو برابر دکمه انصراف
+ * - دکمه انصراف در سمت چپ بدون پس‌زمینه برجسته با نصف عرض دکمه ذخیره
+ * - فعال شدن دکمه ذخیره فقط در صورت ایجاد تغییر واقعی در داده‌ها (Dirty State)
+ */
+@Composable
+fun StickyBottomActionBar(
+    entityName: String,
+    onSave: () -> Unit,
+    onCancel: () -> Unit,
+    isDirty: Boolean = true,
+    isValid: Boolean = true,
+    saveButtonText: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.background,
+        tonalElevation = 6.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Cancel button: Left side, 1/3 width, flat without elevated background
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .testTag("action_bar_cancel_btn"),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Text("انصراف", style = MaterialTheme.typography.labelLarge)
+            }
+
+            // Save button: Right side, 2/3 width, primary color, disabled if !isDirty or !isValid
+            Button(
+                onClick = onSave,
+                enabled = isDirty && isValid,
+                modifier = Modifier
+                    .weight(2f)
+                    .height(48.dp)
+                    .testTag("action_bar_save_btn"),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            ) {
+                Text(
+                    text = saveButtonText ?: "ذخیره $entityName",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+/**
+ * استاندارد ۳.۲ سند توافقنامه: هشدار خروج با تغییرات ذخیره‌نشده (Unsaved Changes Dialog)
+ */
+@Composable
+fun UnsavedChangesDialog(
+    show: Boolean = true,
+    onSaveAndExit: (() -> Unit)? = null,
+    onDiscardAndExit: () -> Unit = {},
+    onConfirmDiscard: () -> Unit = onDiscardAndExit,
+    onDismiss: () -> Unit
+) {
+    if (show) {
+        val discardAction = {
+            onConfirmDiscard()
+            onDiscardAndExit()
+        }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            icon = {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    "تغییرات ذخیره‌نشده",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    "تغییراتی در فرم اعمال کرده‌اید. آیا بدون ذخیره خارج می‌شوید؟",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                if (onSaveAndExit != null) {
+                    Button(
+                        onClick = onSaveAndExit,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("ذخیره و خروج")
+                    }
+                } else {
+                    Button(
+                        onClick = discardAction,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("خروج بدون ذخیره")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("ادامه ویرایش")
+                }
+            }
+        )
+    }
+}
+
+/**
+ * استاندارد ۵.۲ سند اختصاصی: منوی سه‌نقطه عمودی در کارت‌ها (Overflow Menu)
+ */
+@Composable
+fun CardOverflowMenu(
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "عملیات بیشتر",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("ویرایش") },
+                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                onClick = {
+                    expanded = false
+                    onEdit()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("حذف", color = MaterialTheme.colorScheme.error) },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)) },
+                onClick = {
+                    expanded = false
+                    onDelete()
+                }
+            )
+        }
+    }
+}
+
+/**
+ * کنترل انتخاب واحد اقلام فاکتور
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UnitSelectorDropdown(
+    selectedUnit: String,
+    onUnitSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val units = listOf("عدد", "متر", "سانتی‌متر", "متر مربع", "کیلوگرم")
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selectedUnit,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("واحد") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            units.forEach { unit ->
+                DropdownMenuItem(
+                    text = { Text(unit) },
+                    onClick = {
+                        onUnitSelected(unit)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * استاندارد ۱.۲ و ۳ سند توافقنامه: ساختار فرم‌های مدال تمام‌عرض با اسکرول، هدر اختصاصی و تم هماهنگ
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppFormBottomSheet(
+    title: String,
+    subtitle: String? = null,
+    onDismissRequest: () -> Unit,
+    sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = MaterialTheme.colorScheme.background,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                IconButton(onClick = onDismissRequest) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "بستن",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            content()
         }
     }
 }

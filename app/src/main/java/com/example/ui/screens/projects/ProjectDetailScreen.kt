@@ -1,12 +1,15 @@
 package com.example.ui.screens.projects
 
+import android.graphics.Color as AndroidColor
 import android.widget.Toast
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,32 +18,34 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.rememberAsyncImagePainter
-import com.example.data.local.entities.*
+import com.example.data.local.entities.ContractEntity
+import com.example.data.local.entities.CustomerEntity
 import com.example.ui.components.common.*
-import com.example.ui.screens.contracts.InvoiceItemEditDialog
 import com.example.ui.theme.MoneyNegative
 import com.example.ui.theme.MoneyPositive
 import com.example.ui.viewmodels.SignageViewModel
 import com.example.util.FormatUtils
 import com.example.util.JalaliDate
 import com.example.util.PdfGenerator
-import java.util.UUID
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectDetailScreen(
     projectId: String,
     viewModel: SignageViewModel,
     onBack: () -> Unit,
-    onNavigateToContractEditor: (String) -> Unit
+    onNavigateToContractEditor: (String) -> Unit,
+    onNavigateToSpecs: (String) -> Unit,
+    onNavigateToInvoice: (String) -> Unit
 ) {
     val context = LocalContext.current
     val project by viewModel.repository.getProjectByIdFlow(projectId).collectAsState(initial = null)
+    val stages by viewModel.stages.collectAsState()
     val specs by viewModel.getSpecsForProject(projectId).collectAsState(initial = emptyList())
     val invoice by viewModel.getInvoiceForProject(projectId).collectAsState(initial = null)
     val contract by viewModel.getContractForProject(projectId).collectAsState(initial = null)
@@ -62,26 +67,29 @@ fun ProjectDetailScreen(
         invoice?.let { inv -> viewModel.repository.getExpensesForInvoice(inv.id) }
     }?.collectAsState(initial = emptyList())?.value ?: emptyList()
 
-    // Dialog states
     var showProjectEditDialog by remember { mutableStateOf(false) }
-    var selectedSpecForEdit by remember { mutableStateOf<ProjectSpecEntity?>(null) }
-    var showCreateSpecDialog by remember { mutableStateOf(false) }
-    var specToDelete by remember { mutableStateOf<ProjectSpecEntity?>(null) }
-
-    var showAddItemDialog by remember { mutableStateOf(false) }
-    var selectedItemForEdit by remember { mutableStateOf<InvoiceItemEntity?>(null) }
-    var itemToDelete by remember { mutableStateOf<InvoiceItemEntity?>(null) }
-
     val customers by viewModel.customers.collectAsState()
+
+    // Status dropdown state
+    var statusMenuExpanded by remember { mutableStateOf(false) }
+    val statusOptions = listOf(
+        "ACTIVE" to "جاری",
+        "COMPLETED" to "تکمیل‌شده",
+        "CANCELLED" to "لغوشده",
+        "PENDING" to "معلق"
+    )
 
     Scaffold(
         topBar = {
             AppTopBar(
-                title = project?.title ?: "جزئیات پروژه",
-                subtitle = customer?.name,
+                title = "پرونده پروژه",
+                subtitle = project?.title,
                 onBack = onBack,
                 actions = {
-                    IconButton(onClick = { showProjectEditDialog = true }) {
+                    IconButton(
+                        onClick = { showProjectEditDialog = true },
+                        modifier = Modifier.testTag("edit_project_btn")
+                    ) {
                         Icon(Icons.Default.Edit, contentDescription = "ویرایش پروژه")
                     }
                 }
@@ -94,6 +102,21 @@ fun ProjectDetailScreen(
             }
         } else {
             val proj = project!!
+            val completedStageList = remember(proj.completedStageIds) {
+                proj.completedStageIds.split(",").filter { it.isNotBlank() }
+            }
+
+            // Calculate progress based on displayOrder of highest completed stage
+            val sortedStages = remember(stages) { stages.sortedBy { it.displayOrder } }
+            val highestCompletedOrder = remember(sortedStages, completedStageList) {
+                val completed = sortedStages.filter { completedStageList.contains(it.id) }
+                completed.maxOfOrNull { it.displayOrder } ?: 0
+            }
+            val progressFraction = if (sortedStages.isNotEmpty()) {
+                (highestCompletedOrder.toFloat() / sortedStages.size.toFloat()).coerceIn(0f, 1f)
+            } else 0f
+            val progressPercent = (progressFraction * 100).toInt()
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -101,8 +124,9 @@ fun ProjectDetailScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Project Summary Card with prominent "Print Contract" button
+                // Card 1: Project Information Overview
                 item {
+                    Spacer(modifier = Modifier.height(4.dp))
                     AppCard(borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -111,14 +135,27 @@ fun ProjectDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(proj.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                    Text("کارفرما: ${customer?.name ?: "نامشخص"} (${customer?.phone ?: ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("تاریخ شروع: ${proj.startDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        text = proj.title,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "کارفرما: ${customer?.name ?: "نامشخص"} (${customer?.phone ?: "بدون تماس"})",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "تاریخ شروع: ${proj.startDate}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                                 StatusBadge(status = proj.status)
                             }
 
-                            if (proj.description.isNotEmpty()) {
+                            if (proj.description.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "توضیحات: ${proj.description}",
@@ -131,7 +168,7 @@ fun ProjectDetailScreen(
                             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Action buttons: "Print Contract" & "Invoice PDF"
+                            // Action buttons: "Print Contract" & "Clause Settings"
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -195,191 +232,346 @@ fun ProjectDetailScreen(
                     }
                 }
 
-                // Section 1: Signage Technical Specs (مشخصات فنی و زیرمجموعه‌ها)
+                // Section 2: Project Status & Stage Management (Directly below Card 1)
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "مشخصات تابلو و زیرمجموعه‌ها (${specs.size})",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        FilledTonalButton(
-                            onClick = { showCreateSpecDialog = true },
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("افزودن تابلو")
-                        }
-                    }
-                }
-
-                if (specs.isEmpty()) {
-                    item {
-                        EmptyStateView(
-                            title = "مشخصاتی ثبت نشده است",
-                            message = "برای صدور دقیق قرارداد و محاسبات متراژ، ابعاد و نوع تابلو را ثبت کنید.",
-                            icon = Icons.Default.Straighten,
-                            actionButtonText = "افزودن مشخصات تابلو",
-                            onActionClick = { showCreateSpecDialog = true }
-                        )
-                    }
-                } else {
-                    items(specs, key = { it.id }) { spec ->
-                        SpecItemCard(
-                            spec = spec,
-                            onEdit = { selectedSpecForEdit = spec },
-                            onDelete = { specToDelete = spec }
-                        )
-                    }
-                }
-
-                // Section 2: Invoice & Items (فاکتور و ردیف‌های خدمات)
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "فاکتور و ردیف‌های خدمات",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // Print invoice PDF
-                            if (invoiceItems.isNotEmpty()) {
-                                IconButton(onClick = {
-                                    if (customer != null && invoice != null) {
-                                        try {
-                                            val expensesSum = projectExpenses.sumOf { it.amount }
-                                            val pdf = PdfGenerator.generateInvoicePdf(
-                                                context = context,
-                                                contractor = contractorInfo,
-                                                customer = customer!!,
-                                                project = proj,
-                                                invoice = invoice!!,
-                                                items = invoiceItems,
-                                                expensesTotal = expensesSum
-                                            )
-                                            PdfGenerator.sharePdf(context, pdf, "فاکتور تابلوسازی - ${proj.title}")
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "خطا در چاپ فاکتور: ${e.message}", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }) {
-                                    Icon(Icons.Default.PictureAsPdf, contentDescription = "چاپ فاکتور", tint = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-
-                            FilledTonalButton(
-                                onClick = {
-                                    if (invoice == null) {
-                                        // auto create invoice for project
-                                        val newInvoice = InvoiceEntity(
-                                            id = UUID.randomUUID().toString(),
-                                            projectId = proj.id,
-                                            issueDate = JalaliDate.today().formatShort()
-                                        )
-                                        viewModel.saveInvoice(newInvoice, isNew = true) {
-                                            showAddItemDialog = true
-                                        }
-                                    } else {
-                                        showAddItemDialog = true
-                                    }
-                                },
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("ردیف فاکتور")
-                            }
-                        }
-                    }
-                }
-
-                if (invoiceItems.isEmpty()) {
-                    item {
-                        EmptyStateView(
-                            title = "ردیف فاکتور ثبت نشده است",
-                            message = "خدمات و متریال تابلوسازی (برش لیزر، چلنیوم، کامپوزیت، نصب) را اضافه کنید.",
-                            icon = Icons.Default.Receipt
-                        )
-                    }
-                } else {
-                    items(invoiceItems, key = { it.id }) { item ->
-                        AppCard {
+                    AppCard {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            // Status Selector Row
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(item.serviceType, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        text = "متراژ/تعداد: ${item.quantity} • قیمت واحد: ${FormatUtils.formatCurrency(item.unitPrice, currencyUnit)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    if (item.description.isNotEmpty()) {
-                                        Text("توضیح: ${item.description}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = "وضعیت پروژه",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { statusMenuExpanded = true },
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        val currentLabel = statusOptions.firstOrNull { it.first == proj.status }?.second ?: "نامشخص"
+                                        Text(currentLabel, fontWeight = FontWeight.SemiBold)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = statusMenuExpanded,
+                                        onDismissRequest = { statusMenuExpanded = false }
+                                    ) {
+                                        statusOptions.forEach { (statusCode, statusLabel) ->
+                                            DropdownMenuItem(
+                                                text = { Text(statusLabel) },
+                                                onClick = {
+                                                    statusMenuExpanded = false
+                                                    viewModel.updateProjectStatus(proj.id, statusCode)
+                                                }
+                                            )
+                                        }
                                     }
                                 }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = FormatUtils.formatCurrency(item.calculatedTotal, currencyUnit),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Row {
-                                        IconButton(onClick = { selectedItemForEdit = item }, modifier = Modifier.size(32.dp)) {
-                                            Icon(Icons.Default.Edit, contentDescription = "ویرایش", modifier = Modifier.size(16.dp))
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Stage Tracking Header & Progress
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "مراحل اجرایی کارگاه",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "پیشرفت: $progressPercent٪",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { progressFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Multi-selectable Stage Chips
+                            if (sortedStages.isEmpty()) {
+                                Text(
+                                    text = "مرحله‌ای تعریف نشده است. از تنظیمات مراحل را بیفزایید.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(sortedStages, key = { it.id }) { stage ->
+                                        val isCompleted = completedStageList.contains(stage.id)
+                                        val stageColor = try {
+                                            Color(AndroidColor.parseColor(stage.colorHex))
+                                        } catch (_: Exception) {
+                                            MaterialTheme.colorScheme.primary
                                         }
-                                        IconButton(onClick = { itemToDelete = item }, modifier = Modifier.size(32.dp)) {
-                                            Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                        }
+
+                                        FilterChip(
+                                            selected = isCompleted,
+                                            onClick = {
+                                                val updatedList = completedStageList.toMutableList()
+                                                if (isCompleted) {
+                                                    updatedList.remove(stage.id)
+                                                } else {
+                                                    updatedList.add(stage.id)
+                                                }
+                                                // Update completed stages in database
+                                                viewModel.updateProjectStages(
+                                                    projectId = proj.id,
+                                                    stageId = stage.id,
+                                                    completedStageIds = updatedList
+                                                )
+                                            },
+                                            label = {
+                                                Text(
+                                                    text = "${stage.displayOrder}. ${stage.title}",
+                                                    fontWeight = if (isCompleted) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(10.dp)
+                                                        .clip(CircleShape)
+                                                        .background(stageColor)
+                                                )
+                                            },
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
                                     }
                                 }
                             }
                         }
                     }
+                }
 
-                    // Invoice Financial totals summary
-                    item {
-                        val itemsSum = invoiceItems.sumOf { it.calculatedTotal }
-                        val discount = invoice?.discount ?: 0L
-                        val expensesSum = projectExpenses.sumOf { it.amount }
-                        val finalNet = itemsSum - discount + expensesSum
+                // Section 3: Summary Card (Financials and Items)
+                item {
+                    val itemsSum = invoiceItems.sumOf { it.calculatedTotal }
+                    val discount = invoice?.discount ?: 0L
+                    val invoiceExpensesSum = projectExpenses.filter { it.expenseType == "INVOICE" }.sumOf { it.amount }
+                    val workshopExpensesSum = projectExpenses.filter { it.expenseType == "PROJECT" }.sumOf { it.amount }
+                    val finalNet = itemsSum - discount + invoiceExpensesSum
 
-                        AppCard(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("جمع اقلام خدمات و ساخت:", style = MaterialTheme.typography.bodyMedium)
-                                    Text(FormatUtils.formatCurrency(itemsSum, currencyUnit), fontWeight = FontWeight.Bold)
+                    AppCard(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "جمع‌بندی مالی و اقلام پروژه",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "${specs.size} تابلو • ${invoiceItems.size} خدمت",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
                                 }
-                                if (discount > 0) {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text("تخفیف:", style = MaterialTheme.typography.bodyMedium)
-                                        Text("- ${FormatUtils.formatCurrency(discount, currencyUnit)}", fontWeight = FontWeight.Bold, color = MoneyPositive)
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("جمع فاکتور خدمات و ساخت:", style = MaterialTheme.typography.bodyMedium)
+                                Text(FormatUtils.formatCurrency(itemsSum, currencyUnit), fontWeight = FontWeight.Bold)
+                            }
+
+                            if (invoiceExpensesSum > 0) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("هزینه‌های فاکتور شده:", style = MaterialTheme.typography.bodyMedium)
+                                    Text("+ ${FormatUtils.formatCurrency(invoiceExpensesSum, currencyUnit)}", fontWeight = FontWeight.Bold, color = MoneyNegative)
+                                }
+                            }
+
+                            if (workshopExpensesSum > 0) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("هزینه‌های کارگاهی و سود/زیان:", style = MaterialTheme.typography.bodyMedium)
+                                    Text(FormatUtils.formatCurrency(workshopExpensesSum, currencyUnit), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+
+                            Divider(modifier = Modifier.padding(vertical = 10.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("مبلغ نهایی پروژه:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = FormatUtils.formatCurrency(finalNet, currencyUnit),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Section 4: Two prominent full-screen access buttons
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "بخش‌های اختصاصی پرونده",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        // Button 1: Specs Screen
+                        Card(
+                            onClick = { onNavigateToSpecs(proj.id) },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_navigate_specs")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.Straighten, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                        }
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "مشخصات تابلوها",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "ابعاد دقیق سانتی‌متر، متریال، طرح‌ها و تصاویر",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
                                 }
-                                if (expensesSum > 0) {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text("هزینه‌های متصل به فاکتور:", style = MaterialTheme.typography.bodyMedium)
-                                        Text("+ ${FormatUtils.formatCurrency(expensesSum, currencyUnit)}", fontWeight = FontWeight.Bold, color = MoneyNegative)
+
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "${specs.size}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
                                     }
                                 }
-                                Divider(modifier = Modifier.padding(vertical = 8.dp))
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("مبلغ نهایی قابل پرداخت فاکتور:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text(FormatUtils.formatCurrency(finalNet, currencyUnit), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+
+                        // Button 2: Invoice Screen
+                        Card(
+                            onClick = { onNavigateToInvoice(proj.id) },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_navigate_invoice")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.Receipt, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                                        }
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "فاکتور",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "ردیف‌های خدمات، متراژ، قیمت واحد و چاپ PDF",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "${invoiceItems.size}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -387,97 +579,11 @@ fun ProjectDetailScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(40.dp))
+                    Spacer(modifier = Modifier.height(30.dp))
                 }
             }
         }
     }
-
-    // Spec Dialogs
-    if (showCreateSpecDialog) {
-        SpecEditDialog(
-            projectId = projectId,
-            spec = null,
-            onDismiss = { showCreateSpecDialog = false },
-            onSave = { entity, isNew ->
-                viewModel.saveSpec(entity, isNew) {
-                    showCreateSpecDialog = false
-                }
-            }
-        )
-    }
-
-    selectedSpecForEdit?.let { sp ->
-        SpecEditDialog(
-            projectId = projectId,
-            spec = sp,
-            onDismiss = { selectedSpecForEdit = null },
-            onSave = { entity, isNew ->
-                viewModel.saveSpec(entity, isNew) {
-                    selectedSpecForEdit = null
-                }
-            }
-        )
-    }
-
-    DeleteConfirmationDialog(
-        show = specToDelete != null,
-        title = "حذف مشخصات تابلو",
-        message = "آیا از حذف این ردیف مشخصات تابلو اطمینان دارید؟",
-        itemDetail = specToDelete?.subTitle,
-        onConfirm = {
-            specToDelete?.let { sp ->
-                viewModel.deleteSpec(sp) {
-                    specToDelete = null
-                }
-            }
-        },
-        onDismiss = { specToDelete = null }
-    )
-
-    // Invoice Item Dialogs
-    if (showAddItemDialog && invoice != null) {
-        InvoiceItemEditDialog(
-            invoiceId = invoice!!.id,
-            item = null,
-            currencyUnit = currencyUnit,
-            onDismiss = { showAddItemDialog = false },
-            onSave = { entity, isNew ->
-                viewModel.saveInvoiceItem(entity, isNew) {
-                    showAddItemDialog = false
-                }
-            }
-        )
-    }
-
-    selectedItemForEdit?.let { itm ->
-        InvoiceItemEditDialog(
-            invoiceId = itm.invoiceId,
-            item = itm,
-            currencyUnit = currencyUnit,
-            onDismiss = { selectedItemForEdit = null },
-            onSave = { entity, isNew ->
-                viewModel.saveInvoiceItem(entity, isNew) {
-                    selectedItemForEdit = null
-                }
-            }
-        )
-    }
-
-    DeleteConfirmationDialog(
-        show = itemToDelete != null,
-        title = "حذف ردیف فاکتور",
-        message = "آیا از حذف این ردیف خدمت اطمینان دارید؟",
-        itemDetail = itemToDelete?.serviceType,
-        onConfirm = {
-            itemToDelete?.let { itm ->
-                viewModel.deleteInvoiceItem(itm) {
-                    itemToDelete = null
-                }
-            }
-        },
-        onDismiss = { itemToDelete = null }
-    )
 
     if (showProjectEditDialog && project != null) {
         ProjectEditDialog(
@@ -490,77 +596,5 @@ fun ProjectDetailScreen(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun SpecItemCard(
-    spec: ProjectSpecEntity,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
-    AppCard {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(spec.subTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("نوع تابلو: ${spec.signType}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                }
-                Row {
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "ویرایش", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(8.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
-                    Text("طول: ${spec.lengthCm} cm", style = MaterialTheme.typography.labelMedium)
-                    Text("عرض: ${spec.widthCm} cm", style = MaterialTheme.typography.labelMedium)
-                    Text("عمق: ${spec.depthCm} cm", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-
-            if (spec.description.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text("توضیحات: ${spec.description}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            // Attached photo previews
-            val uris = remember(spec.attachmentUris) {
-                spec.attachmentUris.split(",").filter { it.isNotBlank() }
-            }
-            if (uris.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(uris) { u ->
-                        Image(
-                            painter = rememberAsyncImagePainter(u),
-                            contentDescription = "طرح تابلو",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                        )
-                    }
-                }
-            }
-        }
     }
 }

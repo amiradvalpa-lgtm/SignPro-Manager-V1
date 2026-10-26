@@ -31,6 +31,7 @@ class SignageViewModel(application: Application) : AndroidViewModel(application)
     val themeMode = preferences.themeMode.stateIn(viewModelScope, SharingStarted.Eagerly, "SYSTEM")
     val primaryColorKey = preferences.primaryColorKey.stateIn(viewModelScope, SharingStarted.Eagerly, "AMBER")
     val contractorInfo = preferences.contractorInfo.stateIn(viewModelScope, SharingStarted.Eagerly, ContractorInfo())
+    val warnUnsavedChanges = preferences.warnUnsavedChanges.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     // -------------------------------------------------------------
     // Customers State
@@ -38,9 +39,10 @@ class SignageViewModel(application: Application) : AndroidViewModel(application)
     val customers = repository.getAllCustomers().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // -------------------------------------------------------------
-    // Projects State
+    // Projects & Stages State
     // -------------------------------------------------------------
     val projects = repository.getAllProjects().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val stages = repository.getAllStages().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // -------------------------------------------------------------
     // Financials State
@@ -52,6 +54,7 @@ class SignageViewModel(application: Application) : AndroidViewModel(application)
     val contracts = repository.getAllContracts().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val expenseCategories = repository.getAllExpenseCategories().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val recentAudits = repository.getRecentAuditLogs().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val trashItems = repository.getTrashItemsFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // -------------------------------------------------------------
     // Backup Files List
@@ -107,6 +110,57 @@ class SignageViewModel(application: Application) : AndroidViewModel(application)
             val user = currentUser.value?.username ?: "admin"
             repository.deleteProject(project.id, project.title, user)
             onDone()
+        }
+    }
+
+    fun updateProjectStages(projectId: String, stageId: String?, completedStageIds: String, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.updateProjectStages(projectId, stageId, completedStageIds)
+            onDone()
+        }
+    }
+
+    fun updateProjectStages(projectId: String, stageId: String?, completedStageIds: List<String>, onDone: () -> Unit = {}) {
+        updateProjectStages(projectId, stageId, completedStageIds.joinToString(","), onDone)
+    }
+
+    fun updateProjectStatus(projectId: String, status: String, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.updateProjectStatus(projectId, status)
+            onDone()
+        }
+    }
+
+    fun saveStage(stage: ProjectStageEntity, isNew: Boolean, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.saveStage(stage, isNew)
+            onDone()
+        }
+    }
+
+    fun deleteStage(stage: ProjectStageEntity, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.deleteStage(stage.id, stage.name)
+            onDone()
+        }
+    }
+
+    fun reorderStages(stages: List<ProjectStageEntity>) {
+        viewModelScope.launch {
+            repository.reorderStages(stages)
+        }
+    }
+
+    fun restoreTrashItem(item: TrashItem, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.restoreTrashItem(item)
+            onDone()
+        }
+    }
+
+    fun setWarnUnsavedChanges(warn: Boolean) {
+        viewModelScope.launch {
+            preferences.setWarnUnsavedChanges(warn)
         }
     }
 

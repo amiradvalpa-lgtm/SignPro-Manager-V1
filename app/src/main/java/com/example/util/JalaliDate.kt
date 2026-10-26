@@ -121,6 +121,15 @@ data class JalaliDate(
       return fromGregorian(gYear, gMonth, gDay)
     }
 
+    fun fromMillis(millis: Long): JalaliDate {
+      val cal = Calendar.getInstance().apply { timeInMillis = millis }
+      return fromGregorian(
+        cal.get(Calendar.YEAR),
+        cal.get(Calendar.MONTH) + 1,
+        cal.get(Calendar.DAY_OF_MONTH)
+      )
+    }
+
     fun toGregorianCalendar(jy: Int, jm: Int, jd: Int): Calendar {
       val jy2 = jy - 979
       val jm2 = jm - 1

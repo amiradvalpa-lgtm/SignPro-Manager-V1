@@ -1,6 +1,10 @@
 package com.example.ui.screens.settings
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,13 +26,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.data.local.entities.ExpenseCategoryEntity
+import com.example.data.local.entities.*
 import com.example.data.preferences.ContractorInfo
 import com.example.ui.components.common.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodels.SignageViewModel
 import com.example.util.BackupMetadata
 import com.example.util.FormatUtils
+import com.example.util.JalaliDate
 import java.util.UUID
 
 @Composable
@@ -46,6 +51,10 @@ fun SettingsScreen(
     val isBiometricEnabled by viewModel.isBiometricEnabled.collectAsState()
     val categories by viewModel.expenseCategories.collectAsState()
     val backupList by viewModel.backupList.collectAsState()
+    val stages by viewModel.stages.collectAsState()
+    val trashItems by viewModel.trashItems.collectAsState()
+    val recentAudits by viewModel.recentAudits.collectAsState()
+    val warnUnsavedChanges by viewModel.warnUnsavedChanges.collectAsState()
 
     // Dialog states
     var showContractorDialog by remember { mutableStateOf(false) }
@@ -53,6 +62,17 @@ fun SettingsScreen(
     var showCategoryDialog by remember { mutableStateOf(false) }
     var selectedCategoryForEdit by remember { mutableStateOf<ExpenseCategoryEntity?>(null) }
     var categoryToDelete by remember { mutableStateOf<ExpenseCategoryEntity?>(null) }
+
+    // Project Stages dialogs
+    var showStageManagerDialog by remember { mutableStateOf(false) }
+    var selectedStageForEdit by remember { mutableStateOf<ProjectStageEntity?>(null) }
+    var showAddStageDialog by remember { mutableStateOf(false) }
+    var stageToDelete by remember { mutableStateOf<ProjectStageEntity?>(null) }
+
+    // Trash & Audits dialogs
+    var showTrashDialog by remember { mutableStateOf(false) }
+    var itemToRestore by remember { mutableStateOf<TrashItem?>(null) }
+    var showAuditLogsDialog by remember { mutableStateOf(false) }
 
     var backupToRestore by remember { mutableStateOf<BackupMetadata?>(null) }
     var showClearSampleDialog by remember { mutableStateOf(false) }
@@ -193,6 +213,25 @@ fun SettingsScreen(
                                 }
                             }
                         }
+
+                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                        // Warn on unsaved changes switch
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("هشدار تغییرات ذخیره‌نشده", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text("هنگام خروج از فرم‌ها قبل از ذخیره، پیام هشدار نمایش داده شود", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = warnUnsavedChanges,
+                                onCheckedChange = { viewModel.setWarnUnsavedChanges(it) },
+                                modifier = Modifier.testTag("switch_warn_unsaved")
+                            )
+                        }
                     }
                 }
             }
@@ -238,6 +277,178 @@ fun SettingsScreen(
                                 }
                             }
                             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        }
+                    }
+                }
+            }
+
+            // Section: Project Stages Management
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("مدیریت مراحل پروژه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { showAddStageDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("افزودن مرحله")
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                AppCard {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        val sortedStages = stages.sortedBy { it.displayOrder }
+                        if (sortedStages.isEmpty()) {
+                            Text("مرحله‌ای تعریف نشده است", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
+                        } else {
+                            sortedStages.forEachIndexed { index, stage ->
+                                val stageColor = try {
+                                    Color(android.graphics.Color.parseColor(stage.colorHex))
+                                } catch (_: Exception) {
+                                    MaterialTheme.colorScheme.primary
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(14.dp)
+                                                .clip(CircleShape)
+                                                .background(stageColor)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "${stage.displayOrder}. ${stage.title}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        // Move up button
+                                        IconButton(
+                                            onClick = {
+                                                if (index > 0) {
+                                                    val mutable = sortedStages.toMutableList()
+                                                    val prev = mutable[index - 1]
+                                                    mutable[index - 1] = stage
+                                                    mutable[index] = prev
+                                                    viewModel.reorderStages(mutable)
+                                                }
+                                            },
+                                            enabled = index > 0,
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "انتقال به بالا", modifier = Modifier.size(20.dp))
+                                        }
+
+                                        // Move down button
+                                        IconButton(
+                                            onClick = {
+                                                if (index < sortedStages.size - 1) {
+                                                    val mutable = sortedStages.toMutableList()
+                                                    val next = mutable[index + 1]
+                                                    mutable[index + 1] = stage
+                                                    mutable[index] = next
+                                                    viewModel.reorderStages(mutable)
+                                                }
+                                            },
+                                            enabled = index < sortedStages.size - 1,
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "انتقال به پایین", modifier = Modifier.size(20.dp))
+                                        }
+
+                                        IconButton(onClick = { selectedStageForEdit = stage }, modifier = Modifier.size(32.dp)) {
+                                            Icon(Icons.Default.Edit, contentDescription = "ویرایش", modifier = Modifier.size(16.dp))
+                                        }
+                                        IconButton(onClick = { stageToDelete = stage }, modifier = Modifier.size(32.dp)) {
+                                            Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                                if (index < sortedStages.size - 1) {
+                                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section: Trash & Activity Log
+            item {
+                Text("سطل زباله و سابقه فعالیت‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                AppCard {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // Trash Option
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showTrashDialog = true }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("سطل زباله", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("مشاهده و بازیابی موارد حذف‌شده (${trashItems.size} مورد)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+
+                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                        // Audit Log Option (Moved from Dashboard)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAuditLogsDialog = true }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("سابقه فعالیت‌ها و رویدادها", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("مشاهده آخرین تغییرات و ثبت اطلاعات (${recentAudits.size} رویداد)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -543,13 +754,91 @@ fun SettingsScreen(
         },
         onDismiss = { showSeedSampleDialog = false }
     )
+
+    // Stage Dialogs
+    if (showAddStageDialog) {
+        val nextOrder = (stages.maxOfOrNull { it.displayOrder } ?: 0) + 1
+        StageEditDialog(
+            stage = null,
+            nextOrder = nextOrder,
+            onDismiss = { showAddStageDialog = false },
+            onSave = { entity, isNew ->
+                viewModel.saveStage(entity, isNew) {
+                    showAddStageDialog = false
+                }
+            }
+        )
+    }
+
+    selectedStageForEdit?.let { stg ->
+        StageEditDialog(
+            stage = stg,
+            nextOrder = stg.displayOrder,
+            onDismiss = { selectedStageForEdit = null },
+            onSave = { entity, isNew ->
+                viewModel.saveStage(entity, isNew) {
+                    selectedStageForEdit = null
+                }
+            }
+        )
+    }
+
+    DeleteConfirmationDialog(
+        show = stageToDelete != null,
+        title = "حذف مرحله کارگاهی",
+        message = "آیا از حذف مرحله «${stageToDelete?.title}» اطمینان دارید؟",
+        onConfirm = {
+            stageToDelete?.let { stg ->
+                viewModel.deleteStage(stg) {
+                    stageToDelete = null
+                }
+            }
+        },
+        onDismiss = { stageToDelete = null }
+    )
+
+    // Trash Dialog
+    if (showTrashDialog) {
+        TrashDialog(
+            trashItems = trashItems,
+            onDismiss = { showTrashDialog = false },
+            onRequestRestore = { item -> itemToRestore = item }
+        )
+    }
+
+    // Pre-restore confirmation dialog (Rule: confirm before restore)
+    DeleteConfirmationDialog(
+        show = itemToRestore != null,
+        title = "تأیید بازیابی از سطل زباله",
+        message = "آیا از بازیابی «${itemToRestore?.title}» (${itemToRestore?.categoryLabel}) به فهرست فعال اطمینان دارید؟",
+        confirmButtonText = "بازیابی",
+        onConfirm = {
+            itemToRestore?.let { itm ->
+                viewModel.restoreTrashItem(itm) {
+                    itemToRestore = null
+                    Toast.makeText(context, "با موفقیت بازیابی شد.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        },
+        onDismiss = { itemToRestore = null }
+    )
+
+    // Audit Logs Dialog
+    if (showAuditLogsDialog) {
+        AuditLogsDialog(
+            logs = recentAudits,
+            onDismiss = { showAuditLogsDialog = false }
+        )
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContractorEditDialog(
     currentInfo: ContractorInfo,
     onDismiss: () -> Unit,
-    onSave: (ContractorInfo) -> Unit
+    onSave: (ContractorInfo) -> Unit,
+    warnUnsavedChanges: Boolean = true
 ) {
     var name by remember { mutableStateOf(currentInfo.name) }
     var businessName by remember { mutableStateOf(currentInfo.businessName) }
@@ -559,179 +848,736 @@ fun ContractorEditDialog(
     var shabaNumber by remember { mutableStateOf(currentInfo.shabaNumber) }
     var cardNumber by remember { mutableStateOf(currentInfo.cardNumber) }
     var bankName by remember { mutableStateOf(currentInfo.bankName) }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("ویرایش مشخصات پیمانکار و کارگاه", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PersianTextField(value = name, onValueChange = { name = it }, label = "نام پیمانکار")
-                PersianTextField(value = businessName, onValueChange = { businessName = it }, label = "نام مجموعه / کارگاه")
-                PersianTextField(value = phone, onValueChange = { phone = it }, label = "تلفن تماس")
-                PersianTextField(value = address, onValueChange = { address = it }, label = "نشانی کارگاه")
-                PersianTextField(value = accountNumber, onValueChange = { accountNumber = it }, label = "شماره حساب بانک ملی")
-                PersianTextField(value = cardNumber, onValueChange = { cardNumber = it }, label = "شماره کارت")
-                PersianTextField(value = shabaNumber, onValueChange = { shabaNumber = it }, label = "شماره شبا (IR)")
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onSave(
-                        currentInfo.copy(
-                            name = name.trim(),
-                            businessName = businessName.trim(),
-                            address = address.trim(),
-                            phone = phone.trim(),
-                            accountNumber = accountNumber.trim(),
-                            shabaNumber = shabaNumber.trim(),
-                            cardNumber = cardNumber.trim(),
-                            bankName = bankName.trim()
-                        )
-                    )
-                },
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text("ذخیره تغییرات")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
-                Text("انصراف")
-            }
-        },
-        shape = RoundedCornerShape(20.dp)
-    )
+    val isDirty = remember(name, businessName, address, phone, accountNumber, shabaNumber, cardNumber, bankName) {
+        name != currentInfo.name ||
+                businessName != currentInfo.businessName ||
+                address != currentInfo.address ||
+                phone != currentInfo.phone ||
+                accountNumber != currentInfo.accountNumber ||
+                shabaNumber != currentInfo.shabaNumber ||
+                cardNumber != currentInfo.cardNumber ||
+                bankName != currentInfo.bankName
+    }
+
+    val attemptDismiss = {
+        if (warnUnsavedChanges && isDirty) {
+            showUnsavedDialog = true
+        } else {
+            onDismiss()
+        }
+    }
+
+    BackHandler(enabled = true) {
+        attemptDismiss()
+    }
+
+    val executeSave = {
+        onSave(
+            currentInfo.copy(
+                name = name.trim(),
+                businessName = businessName.trim(),
+                address = address.trim(),
+                phone = phone.trim(),
+                accountNumber = accountNumber.trim(),
+                shabaNumber = shabaNumber.trim(),
+                cardNumber = cardNumber.trim(),
+                bankName = bankName.trim()
+            )
+        )
+    }
+
+    AppFormBottomSheet(
+        title = "مشخصات پیمانکار و کارگاه",
+        subtitle = "اطلاعات ثبتی، نشانی کارگاه و شماره حساب‌های بانکی",
+        onDismissRequest = attemptDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            PersianTextField(value = name, onValueChange = { name = it }, label = "نام پیمانکار")
+            PersianTextField(value = businessName, onValueChange = { businessName = it }, label = "نام مجموعه یا کارگاه")
+            PersianTextField(value = phone, onValueChange = { phone = it }, label = "تلفن تماس")
+            PersianTextField(value = address, onValueChange = { address = it }, label = "نشانی کارگاه")
+            PersianTextField(value = accountNumber, onValueChange = { accountNumber = it }, label = "شماره حساب بانک ملی")
+            PersianTextField(value = cardNumber, onValueChange = { cardNumber = it }, label = "شماره کارت")
+            PersianTextField(value = shabaNumber, onValueChange = { shabaNumber = it }, label = "شماره شبا (IR)")
+        }
+
+        StickyBottomActionBar(
+            entityName = "مشخصات پیمانکار",
+            saveButtonText = "ذخیره مشخصات پیمانکار",
+            onSave = executeSave,
+            onCancel = onDismiss,
+            isDirty = isDirty,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+
+    if (showUnsavedDialog) {
+        UnsavedChangesDialog(
+            show = true,
+            onSaveAndExit = {
+                showUnsavedDialog = false
+                executeSave()
+            },
+            onDiscardAndExit = {
+                showUnsavedDialog = false
+                onDismiss()
+            },
+            onDismiss = { showUnsavedDialog = false }
+        )
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileDialog(
     currentUser: com.example.data.local.entities.UserEntity?,
     onDismiss: () -> Unit,
-    onSave: (fullName: String, username: String, newPass: String?, hint: String) -> Unit
+    onSave: (fullName: String, username: String, newPass: String?, hint: String) -> Unit,
+    warnUnsavedChanges: Boolean = true
 ) {
     var fullName by remember { mutableStateOf(currentUser?.fullName ?: "امیرحسین حسنخانی") }
     var username by remember { mutableStateOf(currentUser?.username ?: "admin") }
     var newPassword by remember { mutableStateOf("") }
     var hint by remember { mutableStateOf(currentUser?.securityHint ?: "رمز پیش‌فرض: 1234") }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("تنظیمات رمز عبور و پروفایل", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PersianTextField(value = fullName, onValueChange = { fullName = it }, label = "نام کاربر")
-                PersianTextField(value = username, onValueChange = { username = it }, label = "نام کاربری")
-                PersianTextField(
-                    value = newPassword,
-                    onValueChange = { newPassword = it },
-                    label = "رمز عبور جدید (در صورت تمایل به تغییر)",
-                    placeholder = "خالی بگذارید اگر تغییر نمی‌کند"
-                )
-                PersianTextField(
-                    value = hint,
-                    onValueChange = { hint = it },
-                    label = "راهنمای یادآوری رمز (Hint / پیامک)",
-                    placeholder = "متنی که در صورت فراموشی به عنوان راهنما نشان داده می‌شود"
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onSave(
-                        fullName.trim(),
-                        username.trim(),
-                        if (newPassword.isNotBlank()) newPassword.trim() else null,
-                        hint.trim()
-                    )
-                },
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text("ذخیره")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
-                Text("انصراف")
-            }
-        },
-        shape = RoundedCornerShape(20.dp)
-    )
+    val isDirty = remember(fullName, username, newPassword, hint) {
+        fullName != (currentUser?.fullName ?: "") ||
+                username != (currentUser?.username ?: "") ||
+                newPassword.isNotBlank() ||
+                hint != (currentUser?.securityHint ?: "")
+    }
+
+    val attemptDismiss = {
+        if (warnUnsavedChanges && isDirty) {
+            showUnsavedDialog = true
+        } else {
+            onDismiss()
+        }
+    }
+
+    BackHandler(enabled = true) {
+        attemptDismiss()
+    }
+
+    val executeSave = {
+        onSave(
+            fullName.trim(),
+            username.trim(),
+            if (newPassword.isNotBlank()) newPassword.trim() else null,
+            hint.trim()
+        )
+    }
+
+    AppFormBottomSheet(
+        title = "تنظیمات رمز عبور و پروفایل",
+        subtitle = "مدیریت حساب کاربری ادمین و راهنمای یادآوری رمز",
+        onDismissRequest = attemptDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            PersianTextField(value = fullName, onValueChange = { fullName = it }, label = "نام کاربر")
+            PersianTextField(value = username, onValueChange = { username = it }, label = "نام کاربری")
+            PersianTextField(
+                value = newPassword,
+                onValueChange = { newPassword = it },
+                label = "رمز عبور جدید (در صورت تمایل به تغییر)",
+                placeholder = "خالی بگذارید اگر تغییر نمی‌کند"
+            )
+            PersianTextField(
+                value = hint,
+                onValueChange = { hint = it },
+                label = "راهنمای یادآوری رمز (Hint)",
+                placeholder = "متنی که در صورت فراموشی به عنوان راهنما نشان داده می‌شود"
+            )
+        }
+
+        StickyBottomActionBar(
+            entityName = "اطلاعات کاربر",
+            saveButtonText = "ذخیره اطلاعات کاربر",
+            onSave = executeSave,
+            onCancel = onDismiss,
+            isDirty = isDirty,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+
+    if (showUnsavedDialog) {
+        UnsavedChangesDialog(
+            show = true,
+            onSaveAndExit = {
+                showUnsavedDialog = false
+                executeSave()
+            },
+            onDiscardAndExit = {
+                showUnsavedDialog = false
+                onDismiss()
+            },
+            onDismiss = { showUnsavedDialog = false }
+        )
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseCategoryDialog(
     category: ExpenseCategoryEntity?,
     currencyUnit: String,
     onDismiss: () -> Unit,
-    onSave: (ExpenseCategoryEntity, Boolean) -> Unit
+    onSave: (ExpenseCategoryEntity, Boolean) -> Unit,
+    warnUnsavedChanges: Boolean = true
 ) {
     val isNew = category == null
     var title by remember { mutableStateOf(category?.title ?: "") }
     var defaultAmount by remember { mutableStateOf(category?.defaultAmount ?: 0L) }
     var description by remember { mutableStateOf(category?.description ?: "") }
-
     var titleError by remember { mutableStateOf<String?>(null) }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (isNew) "افزودن عنوان هزینه جدید" else "ویرایش عنوان هزینه", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PersianTextField(
-                    value = title,
-                    onValueChange = {
-                        title = it
-                        titleError = null
-                    },
-                    label = "عنوان هزینه *",
-                    placeholder = "مثال: کرایه بالابر، ورق کامپوزیت",
-                    isError = titleError != null,
-                    errorMessage = titleError
-                )
-                CurrencyInputField(
-                    amount = defaultAmount,
-                    onAmountChange = { defaultAmount = it },
-                    label = "مبلغ پیش‌فرض (اختیاری)",
-                    currencyUnit = currencyUnit
-                )
-                PersianTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = "توضیحات"
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (title.trim().isEmpty()) {
-                        titleError = "عنوان هزینه الزامی است."
-                    } else {
-                        val entity = category?.copy(
-                            title = title.trim(),
-                            defaultAmount = defaultAmount,
-                            description = description.trim()
-                        ) ?: ExpenseCategoryEntity(
-                            id = UUID.randomUUID().toString(),
-                            title = title.trim(),
-                            defaultAmount = defaultAmount,
-                            description = description.trim()
-                        )
-                        onSave(entity, isNew)
-                    }
+    val isDirty = remember(title, defaultAmount, description) {
+        if (isNew) {
+            title.isNotBlank() || defaultAmount > 0L
+        } else {
+            title != (category?.title ?: "") ||
+                    defaultAmount != (category?.defaultAmount ?: 0L) ||
+                    description != (category?.description ?: "")
+        }
+    }
+
+    val attemptDismiss = {
+        if (warnUnsavedChanges && isDirty) {
+            showUnsavedDialog = true
+        } else {
+            onDismiss()
+        }
+    }
+
+    BackHandler(enabled = true) {
+        attemptDismiss()
+    }
+
+    val executeSave = {
+        if (title.trim().isEmpty()) {
+            titleError = "عنوان هزینه الزامی است."
+        } else {
+            val entity = category?.copy(
+                title = title.trim(),
+                defaultAmount = defaultAmount,
+                description = description.trim()
+            ) ?: ExpenseCategoryEntity(
+                id = UUID.randomUUID().toString(),
+                title = title.trim(),
+                defaultAmount = defaultAmount,
+                description = description.trim()
+            )
+            onSave(entity, isNew)
+        }
+    }
+
+    AppFormBottomSheet(
+        title = if (isNew) "افزودن عنوان هزینه جدید" else "ویرایش عنوان هزینه",
+        subtitle = "تعریف عناوین پرکاربرد هزینه‌های کارگاهی و مبلغ پیش‌فرض",
+        onDismissRequest = attemptDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            PersianTextField(
+                value = title,
+                onValueChange = {
+                    title = it
+                    titleError = null
                 },
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text("ذخیره")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
-                Text("انصراف")
-            }
-        },
-        shape = RoundedCornerShape(20.dp)
-    )
+                label = "عنوان هزینه",
+                placeholder = "مثال: کرایه بالابر، ورق کامپوزیت",
+                isError = titleError != null,
+                errorMessage = titleError
+            )
+            CurrencyInputField(
+                amount = defaultAmount,
+                onAmountChange = { defaultAmount = it },
+                label = "مبلغ پیش‌فرض (اختیاری)",
+                currencyUnit = currencyUnit
+            )
+            PersianTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = "توضیحات"
+            )
+        }
+
+        StickyBottomActionBar(
+            entityName = "عنوان هزینه",
+            saveButtonText = "ذخیره عنوان هزینه",
+            onSave = executeSave,
+            onCancel = onDismiss,
+            isDirty = isDirty,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+
+    if (showUnsavedDialog) {
+        UnsavedChangesDialog(
+            show = true,
+            onSaveAndExit = {
+                showUnsavedDialog = false
+                executeSave()
+            },
+            onDiscardAndExit = {
+                showUnsavedDialog = false
+                onDismiss()
+            },
+            onDismiss = { showUnsavedDialog = false }
+        )
+    }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StageEditDialog(
+    stage: com.example.data.local.entities.ProjectStageEntity?,
+    nextOrder: Int,
+    onDismiss: () -> Unit,
+    onSave: (com.example.data.local.entities.ProjectStageEntity, Boolean) -> Unit,
+    warnUnsavedChanges: Boolean = true
+) {
+    val isNew = stage == null
+    var title by remember { mutableStateOf(stage?.title ?: "") }
+    var selectedColor by remember { mutableStateOf(stage?.colorHex ?: "#3B82F6") }
+    var titleError by remember { mutableStateOf<String?>(null) }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+
+    val presetColors = listOf(
+        "#3B82F6", "#10B981", "#F59E0B", "#EF4444",
+        "#8B5CF6", "#EC4899", "#14B8A6", "#6366F1"
+    )
+
+    val isDirty = remember(title, selectedColor) {
+        if (isNew) {
+            title.isNotBlank()
+        } else {
+            title != (stage?.title ?: "") || selectedColor != (stage?.colorHex ?: "")
+        }
+    }
+
+    val attemptDismiss = {
+        if (warnUnsavedChanges && isDirty) {
+            showUnsavedDialog = true
+        } else {
+            onDismiss()
+        }
+    }
+
+    BackHandler(enabled = true) {
+        attemptDismiss()
+    }
+
+    val executeSave = {
+        if (title.trim().isEmpty()) {
+            titleError = "عنوان مرحله الزامی است."
+        } else {
+            val entity = stage?.copy(
+                name = title.trim(),
+                colorHex = selectedColor
+            ) ?: ProjectStageEntity(
+                id = UUID.randomUUID().toString(),
+                name = title.trim(),
+                colorHex = selectedColor,
+                displayOrder = nextOrder
+            )
+            onSave(entity, isNew)
+        }
+    }
+
+    AppFormBottomSheet(
+        title = if (isNew) "افزودن مرحله جدید" else "ویرایش مرحله کارگاهی",
+        subtitle = "نام مرحله و نشانگر رنگی در پرونده پروژه",
+        onDismissRequest = attemptDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            PersianTextField(
+                value = title,
+                onValueChange = {
+                    title = it
+                    titleError = null
+                },
+                label = "عنوان مرحله کارگاهی",
+                placeholder = "مثال: خم‌کاری و جوشکاری",
+                isError = titleError != null,
+                errorMessage = titleError
+            )
+
+            Text("رنگ نشانگر مرحله:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(presetColors) { hex ->
+                    val isSelected = selectedColor.equals(hex, ignoreCase = true)
+                    val color = try {
+                        Color(android.graphics.Color.parseColor(hex))
+                    } catch (_: Exception) { Color.Gray }
+
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                            .border(
+                                width = if (isSelected) 3.dp else 1.dp,
+                                color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                shape = CircleShape
+                            )
+                            .clickable { selectedColor = hex },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+
+        StickyBottomActionBar(
+            entityName = "مرحله کارگاهی",
+            saveButtonText = "ذخیره مرحله کارگاهی",
+            onSave = executeSave,
+            onCancel = onDismiss,
+            isDirty = isDirty,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+
+    if (showUnsavedDialog) {
+        UnsavedChangesDialog(
+            show = true,
+            onSaveAndExit = {
+                showUnsavedDialog = false
+                executeSave()
+            },
+            onDiscardAndExit = {
+                showUnsavedDialog = false
+                onDismiss()
+            },
+            onDismiss = { showUnsavedDialog = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TrashDialog(
+    trashItems: List<TrashItem>,
+    onDismiss: () -> Unit,
+    onRequestRestore: (TrashItem) -> Unit
+) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    AppFormBottomSheet(
+        title = "سطل زباله",
+        subtitle = "${trashItems.size} مورد حذف‌شده قابل بازیابی",
+        onDismissRequest = onDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp)
+        ) {
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.background
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("فهرست یکپارچه") }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("گروه‌بندی دسته‌ها") }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (trashItems.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "سطل زباله خالی است.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else if (selectedTab == 0) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 450.dp)
+                ) {
+                    items(trashItems, key = { it.id }) { item ->
+                        TrashItemRow(item = item, onRestore = { onRequestRestore(item) })
+                    }
+                }
+            } else {
+                val grouped = remember(trashItems) { trashItems.groupBy { it.categoryLabel } }
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 450.dp)
+                ) {
+                    grouped.forEach { (categoryName, items) ->
+                        item {
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "$categoryName (${items.size})",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                        items(items, key = { it.id }) { item ->
+                            TrashItemRow(item = item, onRestore = { onRequestRestore(item) })
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Text("بستن")
+            }
+        }
+    }
+}
+
+@Composable
+fun TrashItemRow(
+    item: TrashItem,
+    onRestore: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(item.categoryLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(item.details, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            FilledTonalButton(
+                onClick = onRestore,
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("بازیابی", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AuditLogsDialog(
+    logs: List<com.example.data.local.entities.AuditLogEntity>,
+    onDismiss: () -> Unit
+) {
+    AppFormBottomSheet(
+        title = "سابقه فعالیت‌ها و رویدادها",
+        subtitle = "${logs.size} رویداد ثبت‌شده در سیستم",
+        onDismissRequest = onDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp)
+        ) {
+            if (logs.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("هیچ رویدادی ثبت نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 450.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(logs, key = { it.id }) { log ->
+                        val actionColor = when (log.action) {
+                            "INSERT" -> MoneyPositive
+                            "UPDATE" -> MaterialTheme.colorScheme.primary
+                            "DELETE" -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.outline
+                        }
+                        val actionLabel = when (log.action) {
+                            "INSERT" -> "ثبت جدید"
+                            "UPDATE" -> "ویرایش"
+                            "DELETE" -> "حذف"
+                            "RESTORE" -> "بازیابی"
+                            else -> log.action
+                        }
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Surface(
+                                            color = actionColor.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = actionLabel,
+                                                color = actionColor,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        Text(log.entityType, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    }
+                                    if (log.details.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(log.details, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Text(
+                                    text = JalaliDate.fromMillis(log.timestamp).formatShort(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Text("بستن")
+            }
+        }
+    }
+}
+
+@Preview(name = "Contractor Dialog Preview", showBackground = true)
+@Composable
+fun ContractorEditDialogPreview() {
+    MyApplicationTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ContractorEditDialog(
+                currentInfo = ContractorInfo(
+                    name = "امیرحسین حسنخانی",
+                    businessName = "تابلوسازی آلپا",
+                    address = "تهران، شهرک صنعتی چهاردانگه",
+                    phone = "09121234567"
+                ),
+                onDismiss = {},
+                onSave = {}
+            )
+        }
+    }
+}
+
+@Preview(name = "Stage Edit Preview", showBackground = true)
+@Composable
+fun StageEditDialogPreview() {
+    MyApplicationTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            StageEditDialog(
+                stage = ProjectStageEntity(
+                    id = "s1",
+                    name = "خم‌کاری و جوشکاری شاسی",
+                    colorHex = "#F59E0B",
+                    displayOrder = 2
+                ),
+                nextOrder = 3,
+                onDismiss = {},
+                onSave = { _, _ -> }
+            )
+        }
+    }
+}
+
+

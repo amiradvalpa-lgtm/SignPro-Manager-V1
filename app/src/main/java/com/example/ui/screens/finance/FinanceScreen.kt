@@ -41,7 +41,9 @@ fun FinanceScreen(
     val currencyUnit by viewModel.currencyUnit.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("دریافت و پرداخت", "چک‌ها", "هزینه‌های کارگاه", "گزارش مالی")
+    val tabs = listOf("دریافت از مشتری", "پرداخت به مشتری", "چک‌ها", "هزینه‌های کارگاه", "گزارش مالی")
+
+    var paymentDialogType by remember { mutableStateOf("RECEIPT") }
 
     // Dialog states
     var showPaymentDialog by remember { mutableStateOf(false) }
@@ -56,6 +58,12 @@ fun FinanceScreen(
     var selectedExpenseForEdit by remember { mutableStateOf<ExpenseEntity?>(null) }
     var expenseToDelete by remember { mutableStateOf<ExpenseEntity?>(null) }
 
+    val fabColor = when (selectedTabIndex) {
+        0 -> MoneyPositive
+        1 -> MoneyNegative
+        else -> MaterialTheme.colorScheme.primary
+    }
+
     Scaffold(
         topBar = {
             AppTopBar(
@@ -67,14 +75,24 @@ fun FinanceScreen(
             FloatingActionButton(
                 onClick = {
                     when (selectedTabIndex) {
-                        0 -> showPaymentDialog = true
-                        1 -> showCheckDialog = true
-                        2 -> showExpenseDialog = true
-                        else -> showPaymentDialog = true
+                        0 -> {
+                            paymentDialogType = "RECEIPT"
+                            showPaymentDialog = true
+                        }
+                        1 -> {
+                            paymentDialogType = "PAYMENT"
+                            showPaymentDialog = true
+                        }
+                        2 -> showCheckDialog = true
+                        3 -> showExpenseDialog = true
+                        else -> {
+                            paymentDialogType = "RECEIPT"
+                            showPaymentDialog = true
+                        }
                     }
                 },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
+                containerColor = fabColor,
+                contentColor = androidx.compose.ui.graphics.Color.White,
                 shape = RoundedCornerShape(18.dp),
                 modifier = Modifier.testTag("finance_add_fab")
             ) {
@@ -104,23 +122,49 @@ fun FinanceScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             when (selectedTabIndex) {
-                0 -> { // Payments & Receipts
-                    if (payments.isEmpty()) {
-                        EmptyStateView(
-                            title = "تراکنشی ثبت نشده است",
-                            message = "برای ثبت دریافت نقدی، پوز یا کارت‌به‌کارت از دکمه (+) استفاده کنید.",
-                            icon = Icons.Default.Payments,
-                            actionButtonText = "ثبت تراکنش جدید",
-                            onActionClick = { showPaymentDialog = true }
-                        )
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(payments, key = { it.id }) { pay ->
+                0 -> { // Receipts from Customers (دریافت از مشتری)
+                    val receipts = remember(payments) { payments.filter { it.type == "RECEIPT" } }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Prominent Green Action Button
+                        item {
+                            Button(
+                                onClick = {
+                                    paymentDialogType = "RECEIPT"
+                                    showPaymentDialog = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MoneyPositive),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .testTag("add_receipt_btn")
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("دریافت از مشتری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (receipts.isEmpty()) {
+                            item {
+                                EmptyStateView(
+                                    title = "دریافتی ثبت نشده است",
+                                    message = "برای ثبت دریافت نقدی، پوز یا واریزی مشتری، دکمه بالا را لمس کنید.",
+                                    icon = Icons.Default.Payments,
+                                    actionButtonText = "دریافت از مشتری",
+                                    onActionClick = {
+                                        paymentDialogType = "RECEIPT"
+                                        showPaymentDialog = true
+                                    }
+                                )
+                            }
+                        } else {
+                            items(receipts, key = { it.id }) { pay ->
                                 val customer = customers.firstOrNull { it.id == pay.customerId }
                                 AppCard {
                                     Row(
@@ -132,10 +176,10 @@ fun FinanceScreen(
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = if (pay.type == "RECEIPT") "دریافت از: ${customer?.name ?: "نامشخص"}" else "پرداخت به: ${customer?.name ?: "نامشخص"}",
+                                                text = "دریافت از: ${customer?.name ?: "نامشخص"}",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (pay.type == "RECEIPT") MoneyPositive else MoneyNegative
+                                                color = MoneyPositive
                                             )
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
@@ -157,25 +201,120 @@ fun FinanceScreen(
                                                 text = FormatUtils.formatCurrency(pay.amount, currencyUnit),
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (pay.type == "RECEIPT") MoneyPositive else MoneyNegative
+                                                color = MoneyPositive
                                             )
-                                            Row {
-                                                IconButton(onClick = { selectedPaymentForEdit = pay }) {
-                                                    Icon(Icons.Default.Edit, contentDescription = "ویرایش", tint = MaterialTheme.colorScheme.primary)
-                                                }
-                                                IconButton(onClick = { paymentToDelete = pay }) {
-                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error)
-                                                }
-                                            }
+                                            CardOverflowMenu(
+                                                onEdit = {
+                                                    paymentDialogType = "RECEIPT"
+                                                    selectedPaymentForEdit = pay
+                                                },
+                                                onDelete = { paymentToDelete = pay }
+                                            )
                                         }
                                     }
                                 }
                             }
-                            item { Spacer(modifier = Modifier.height(80.dp)) }
                         }
+                        item { Spacer(modifier = Modifier.height(80.dp)) }
                     }
                 }
-                1 -> { // Checks
+                1 -> { // Payments to Customers (پرداخت به مشتری)
+                    val customerPayments = remember(payments) { payments.filter { it.type == "PAYMENT" } }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Prominent Red Action Button
+                        item {
+                            Button(
+                                onClick = {
+                                    paymentDialogType = "PAYMENT"
+                                    showPaymentDialog = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MoneyNegative),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .testTag("add_payment_btn")
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("پرداخت به مشتری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (customerPayments.isEmpty()) {
+                            item {
+                                EmptyStateView(
+                                    title = "پرداختی به مشتری ثبت نشده است",
+                                    message = "برای ثبت استرداد وجه یا پرداخت به مشتری، دکمه بالا را لمس کنید.",
+                                    icon = Icons.Default.Payments,
+                                    actionButtonText = "پرداخت به مشتری",
+                                    onActionClick = {
+                                        paymentDialogType = "PAYMENT"
+                                        showPaymentDialog = true
+                                    }
+                                )
+                            }
+                        } else {
+                            items(customerPayments, key = { it.id }) { pay ->
+                                val customer = customers.firstOrNull { it.id == pay.customerId }
+                                AppCard {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "پرداخت به: ${customer?.name ?: "نامشخص"}",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MoneyNegative
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "تاریخ: ${pay.date} • روش: ${pay.method} ${if (pay.trackingCode.isNotEmpty()) "• پیگیری: " + pay.trackingCode else ""}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            if (pay.description.isNotEmpty()) {
+                                                Text(
+                                                    text = "توضیح: ${pay.description}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = FormatUtils.formatCurrency(pay.amount, currencyUnit),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MoneyNegative
+                                            )
+                                            CardOverflowMenu(
+                                                onEdit = {
+                                                    paymentDialogType = "PAYMENT"
+                                                    selectedPaymentForEdit = pay
+                                                },
+                                                onDelete = { paymentToDelete = pay }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        item { Spacer(modifier = Modifier.height(80.dp)) }
+                    }
+                }
+                2 -> { // Checks
                     if (checks.isEmpty()) {
                         EmptyStateView(
                             title = "چکی ثبت نشده است",
@@ -274,7 +413,7 @@ fun FinanceScreen(
                         }
                     }
                 }
-                2 -> { // Expenses
+                3 -> { // Expenses
                     if (expenses.isEmpty()) {
                         EmptyStateView(
                             title = "هزینه‌ای ثبت نشده است",
@@ -330,7 +469,7 @@ fun FinanceScreen(
                         }
                     }
                 }
-                3 -> { // Financial Report & Profit/Loss
+                4 -> { // Financial Report & Profit/Loss
                     val totalBilled = contracts.sumOf { it.totalAmount - it.discount }
                     val totalReceipts = payments.filter { it.type == "RECEIPT" }.sumOf { it.amount }
                     val totalRefunds = payments.filter { it.type == "PAYMENT" }.sumOf { it.amount }
@@ -378,6 +517,8 @@ fun FinanceScreen(
         PaymentEditDialog(
             payment = null,
             customers = customers,
+            initialType = paymentDialogType,
+            hideTypeSelector = true,
             currencyUnit = currencyUnit,
             onDismiss = { showPaymentDialog = false },
             onSave = { entity, isNew ->
@@ -392,6 +533,8 @@ fun FinanceScreen(
         PaymentEditDialog(
             payment = pay,
             customers = customers,
+            initialType = pay.type,
+            hideTypeSelector = true,
             currencyUnit = currencyUnit,
             onDismiss = { selectedPaymentForEdit = null },
             onSave = { entity, isNew ->

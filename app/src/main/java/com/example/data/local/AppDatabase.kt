@@ -17,6 +17,7 @@ import java.util.UUID
     entities = [
         CustomerEntity::class,
         ProjectEntity::class,
+        ProjectStageEntity::class,
         ProjectSpecEntity::class,
         InvoiceEntity::class,
         InvoiceItemEntity::class,
@@ -28,12 +29,13 @@ import java.util.UUID
         UserEntity::class,
         AuditLogEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun customerDao(): CustomerDao
     abstract fun projectDao(): ProjectDao
+    abstract fun projectStageDao(): ProjectStageDao
     abstract fun invoiceDao(): InvoiceDao
     abstract fun financialDao(): FinancialDao
     abstract fun contractDao(): ContractDao
@@ -73,10 +75,29 @@ abstract class AppDatabase : RoomDatabase() {
             if (existingUser == null) {
                 seedInitialData(database)
             }
+            val stageCount = database.projectStageDao().getStageCount()
+            if (stageCount == 0) {
+                seedDefaultStages(database)
+            }
             val customerCount = database.customerDao().getRawCustomerCount()
             if (customerCount == 0) {
                 SampleDataGenerator.seedSampleData(database)
             }
+        }
+
+        private suspend fun seedDefaultStages(database: AppDatabase) {
+            val stageDao = database.projectStageDao()
+            val defaultStages = listOf(
+                ProjectStageEntity("stage_1", "مشاوره و برداشت ابعاد", 1, "#2196F3", isDefault = true),
+                ProjectStageEntity("stage_2", "طراحی سه‌بعدی و تأییدیه", 2, "#9C27B0", isDefault = true),
+                ProjectStageEntity("stage_3", "برش لیزر پلکسی و آهن", 3, "#FF9800", isDefault = true),
+                ProjectStageEntity("stage_4", "حروف‌سازی و مونتاژ لبه", 4, "#E91E63", isDefault = true),
+                ProjectStageEntity("stage_5", "سیم‌کشی و اس‌ام‌دی SMD", 5, "#009688", isDefault = true),
+                ProjectStageEntity("stage_6", "زیرسازی کامپوزیت نما", 6, "#795548", isDefault = true),
+                ProjectStageEntity("stage_7", "نصب در محل پروژه", 7, "#4CAF50", isDefault = true),
+                ProjectStageEntity("stage_8", "تست نور، تحویل و تسویه", 8, "#3F51B5", isDefault = true)
+            )
+            stageDao.insertStages(defaultStages)
         }
 
         private suspend fun seedInitialData(database: AppDatabase) {

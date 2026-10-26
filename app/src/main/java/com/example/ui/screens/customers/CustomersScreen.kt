@@ -246,3 +246,35 @@ private fun CustomerListItem(
         }
     }
 }
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Customer Card Preview", showBackground = true)
+@Composable
+fun CustomerCardPreview() {
+    com.example.ui.theme.MyApplicationTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            com.example.ui.components.common.AppCard(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = CircleShape,
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("فروشگاه بزرگ کوروش", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("09123456789", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}

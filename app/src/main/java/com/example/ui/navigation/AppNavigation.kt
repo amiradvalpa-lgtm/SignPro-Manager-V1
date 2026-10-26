@@ -30,6 +30,8 @@ import com.example.ui.screens.finance.FinanceScreen
 import com.example.ui.screens.finance.PaymentEditDialog
 import com.example.ui.screens.projects.ProjectDetailScreen
 import com.example.ui.screens.projects.ProjectEditDialog
+import com.example.ui.screens.projects.ProjectInvoiceScreen
+import com.example.ui.screens.projects.ProjectSpecsScreen
 import com.example.ui.screens.projects.ProjectsScreen
 import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.viewmodels.SignageViewModel
@@ -92,7 +94,8 @@ fun AppNavigation(viewModel: SignageViewModel) {
                                     }
                                 },
                                 icon = {
-                                    screen.icon?.let {
+                                    val iconVector = if (selected) screen.icon else (screen.unselectedIcon ?: screen.icon)
+                                    iconVector?.let {
                                         Icon(imageVector = it, contentDescription = screen.title)
                                     }
                                 },
@@ -200,7 +203,39 @@ fun AppNavigation(viewModel: SignageViewModel) {
                         onBack = { navController.popBackStack() },
                         onNavigateToContractEditor = { pId ->
                             navController.navigate(Screen.ContractEditor.createRoute(pId))
+                        },
+                        onNavigateToSpecs = { pId ->
+                            navController.navigate(Screen.ProjectSpecs.createRoute(pId))
+                        },
+                        onNavigateToInvoice = { pId ->
+                            navController.navigate(Screen.ProjectInvoice.createRoute(pId))
                         }
+                    )
+                }
+
+                // Project Specs (Full Screen)
+                composable(
+                    route = Screen.ProjectSpecs.route,
+                    arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
+                    ProjectSpecsScreen(
+                        projectId = projectId,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                // Project Invoice (Full Screen)
+                composable(
+                    route = Screen.ProjectInvoice.route,
+                    arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
+                    ProjectInvoiceScreen(
+                        projectId = projectId,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() }
                     )
                 }
 

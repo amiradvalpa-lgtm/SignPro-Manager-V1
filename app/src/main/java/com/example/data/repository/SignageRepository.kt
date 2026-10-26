@@ -39,11 +39,51 @@ data class DashboardStats(
 class SignageRepository(private val database: AppDatabase) {
     private val customerDao = database.customerDao()
     private val projectDao = database.projectDao()
+    private val projectStageDao = database.projectStageDao()
     private val invoiceDao = database.invoiceDao()
     private val financialDao = database.financialDao()
     private val contractDao = database.contractDao()
     private val settingsDao = database.settingsDao()
     private val auditDao = database.auditDao()
+
+    // -------------------------------------------------------------
+    // Project Stages (Dynamic Stages Management)
+    // -------------------------------------------------------------
+    fun getAllStages(): Flow<List<ProjectStageEntity>> = projectStageDao.getAllStages()
+
+    suspend fun getAllStagesOnce(): List<ProjectStageEntity> = projectStageDao.getAllStagesOnce()
+
+    suspend fun saveStage(stage: ProjectStageEntity, isNew: Boolean) {
+        val now = System.currentTimeMillis()
+        if (isNew) {
+            projectStageDao.insertStage(stage.copy(createdAt = now, updatedAt = now))
+            logAudit("ProjectStage", stage.id, "CREATE", "افزودن مرحله جدید: ${stage.name}", "admin")
+        } else {
+            projectStageDao.updateStage(stage.copy(updatedAt = now))
+            logAudit("ProjectStage", stage.id, "UPDATE", "ویرایش مرحله: ${stage.name}", "admin")
+        }
+    }
+
+    suspend fun reorderStages(stages: List<ProjectStageEntity>) {
+        val updated = stages.mapIndexed { index, stage ->
+            stage.copy(displayOrder = index + 1, updatedAt = System.currentTimeMillis())
+        }
+        projectStageDao.updateStages(updated)
+        logAudit("ProjectStage", "all", "REORDER", "مرتب‌سازی مراحل پروژه (${updated.size} مرحله)", "admin")
+    }
+
+    suspend fun deleteStage(id: String, stageName: String) {
+        projectStageDao.softDeleteStage(id)
+        logAudit("ProjectStage", id, "DELETE", "حذف مرحله پروژه: $stageName", "admin")
+    }
+
+    suspend fun updateProjectStages(projectId: String, stageId: String?, completedStageIds: String) {
+        projectDao.updateProjectStages(projectId, stageId, completedStageIds)
+    }
+
+    suspend fun updateProjectStatus(projectId: String, status: String) {
+        projectDao.updateProjectStatus(projectId, status)
+    }
 
     // -------------------------------------------------------------
     // Customers
@@ -357,6 +397,72 @@ class SignageRepository(private val database: AppDatabase) {
                 balance = balance
             )
         }
+    }
+
+    // -------------------------------------------------------------
+    // Trash / Recycle Bin (سطل زباله)
+    // -------------------------------------------------------------
+    fun getTrashItemsFlow(): Flow<List<TrashItem>> {
+        return combine(
+            listOf(
+                customerDao.getDeletedCustomers(),
+                projectDao.getDeletedProjects(),
+                invoiceDao.getDeletedInvoices(),
+                financialDao.getDeletedPayments(),
+                financialDao.getDeletedChecks(),
+                financialDao.getDeletedExpenses()
+            )
+        ) { array ->
+            @Suppress("UNCHECKED_CAST")
+            val customers = array[0] as List<CustomerEntity>
+            @Suppress("UNCHECKED_CAST")
+            val projects = array[1] as List<ProjectEntity>
+            @Suppress("UNCHECKED_CAST")
+            val invoices = array[2] as List<InvoiceEntity>
+            @Suppress("UNCHECKED_CAST")
+            val payments = array[3] as List<PaymentEntity>
+            @Suppress("UNCHECKED_CAST")
+            val checks = array[4] as List<CheckEntity>
+            @Suppress("UNCHECKED_CAST")
+            val expenses = array[5] as List<ExpenseEntity>
+
+            val list = mutableListOf<TrashItem>()
+            customers.forEach {
+                list.add(TrashItem(it.id, it.name, "CUSTOMER", "مشتری", "شماره تماس: ${it.phone}", it.updatedAt))
+            }
+            projects.forEach {
+                list.add(TrashItem(it.id, it.title, "PROJECT", "پروژه", "وضعیت: ${it.status}", it.updatedAt))
+            }
+            invoices.forEach {
+                list.add(TrashItem(it.id, "فاکتور تاریخ ${it.issueDate}", "INVOICE", "فاکتور", "تخفیف: ${it.discount}", it.updatedAt))
+            }
+            payments.forEach {
+                val pType = if (it.type == "RECEIPT") "دریافت از مشتری" else "پرداخت به مشتری"
+                list.add(TrashItem(it.id, "$pType - مبلغ ${it.amount}", "PAYMENT", "تراکنش", "روش: ${it.method}", it.updatedAt))
+            }
+            checks.forEach {
+                list.add(TrashItem(it.id, "چک ${it.bankName} - ${it.checkNumber}", "CHECK", "چک صیادی", "مبلغ: ${it.amount} - سررسید: ${it.dueDate}", it.updatedAt))
+            }
+            expenses.forEach {
+                val expPersian = if (it.expenseType == "INVOICE") "هزینه فاکتور" else "هزینه کارگاهی"
+                list.add(TrashItem(it.id, "$expPersian: ${it.category}", "EXPENSE", "هزینه", "مبلغ: ${it.amount} - تاریخ: ${it.date}", it.updatedAt))
+            }
+            list.sortedByDescending { it.deletedAt }
+        }
+    }
+
+    suspend fun restoreTrashItem(item: TrashItem) {
+        val now = System.currentTimeMillis()
+        when (item.type) {
+            "CUSTOMER" -> customerDao.restoreCustomer(item.id, now)
+            "PROJECT" -> projectDao.restoreProject(item.id, now)
+            "INVOICE" -> invoiceDao.restoreInvoice(item.id, now)
+            "PAYMENT" -> financialDao.restorePayment(item.id, now)
+            "CHECK" -> financialDao.restoreCheck(item.id, now)
+            "EXPENSE" -> financialDao.restoreExpense(item.id, now)
+            "CONTRACT" -> contractDao.restoreContract(item.id, now)
+        }
+        logAudit("Trash", item.id, "RESTORE", "بازیابی از سطل زباله: ${item.typePersian} - ${item.title}", "admin")
     }
 
     suspend fun clearSampleData() {

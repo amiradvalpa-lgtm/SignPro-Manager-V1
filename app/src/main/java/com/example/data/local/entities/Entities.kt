@@ -24,6 +24,34 @@ data class CustomerEntity(
 )
 
 @Entity(
+    tableName = "project_stages",
+    indices = [Index(value = ["displayOrder"]), Index(value = ["isDeleted"])]
+)
+data class ProjectStageEntity(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val displayOrder: Int,
+    val colorHex: String = "#FF9800",
+    val isDefault: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+) {
+    val title: String get() = name
+}
+
+data class TrashItem(
+    val id: String,
+    val title: String,
+    val type: String,
+    val categoryLabel: String,
+    val details: String,
+    val deletedAt: Long
+) {
+    val typePersian: String get() = categoryLabel
+}
+
+@Entity(
     tableName = "projects",
     foreignKeys = [
         ForeignKey(
@@ -40,7 +68,9 @@ data class ProjectEntity(
     val customerId: String,
     val title: String,
     val startDate: String,
-    val status: String = "در حال ساخت", // در حال مذاکره، طراحی، در حال ساخت، در حال نصب، تکمیل شده، تسویه شده
+    val status: String = "در حال ساخت", // وضعیت کلان: در حال مذاکره، طراحی، در حال ساخت، در حال نصب، تکمیل شده، تسویه شده
+    val stageId: String? = null, // شناسه پایدار مرحله فعلی پروژه
+    val completedStageIds: String = "", // لیست شناسه‌های مراحل تکمیل‌شده جدا شده با کاما
     val description: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
@@ -117,7 +147,8 @@ data class InvoiceItemEntity(
     val invoiceId: String,
     val serviceType: String, // نوع خدمت: ساخت حروف برجسته، زیرسازی کامپوزیت، ترانس و پاور، اس‌ام‌دی، نصب و راه‌اندازی
     val itemDescription: String = "",
-    val quantity: Double, // متراژ یا تعداد
+    val quantity: Double, // مقدار (متراژ، تعداد یا وزن)
+    val unit: String = "عدد", // عدد، متر، سانتی‌متر، متر مربع، کیلوگرم
     val unitPrice: Long, // قیمت واحد
     val calculatedTotal: Long = (quantity * unitPrice).toLong(), // محاسبه خودکار
     val description: String = "",
@@ -137,11 +168,13 @@ data class InvoiceItemEntity(
             onDelete = ForeignKey.SET_NULL
         )
     ],
-    indices = [Index(value = ["invoiceId"]), Index(value = ["isDeleted"])]
+    indices = [Index(value = ["invoiceId"]), Index(value = ["projectId"]), Index(value = ["isDeleted"])]
 )
 data class ExpenseEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
-    val invoiceId: String? = null, // هزینه مرتبط با فاکتور یا عمومی
+    val invoiceId: String? = null, // مرتبط با فاکتور
+    val projectId: String? = null, // مرتبط با پروژه
+    val expenseType: String = "PROJECT", // "INVOICE" (هزینه فاکتور مشتری) یا "PROJECT" (هزینه کارگاهی و سود/زیان)
     val category: String, // عنوان هزینه: ورق پلکسی، رول چلنیوم، اس‌ام‌دی، ترانس، داربست، جرثقیل، ایاب‌ذهاب، دستمزد کارگر
     val amount: Long,
     val date: String,

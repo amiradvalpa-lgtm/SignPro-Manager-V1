@@ -9,6 +9,9 @@ interface CustomerDao {
     @Query("SELECT * FROM customers WHERE isDeleted = 0 ORDER BY updatedAt DESC")
     fun getAllCustomers(): Flow<List<CustomerEntity>>
 
+    @Query("SELECT * FROM customers WHERE isDeleted = 1 ORDER BY updatedAt DESC")
+    fun getDeletedCustomers(): Flow<List<CustomerEntity>>
+
     @Query("SELECT * FROM customers WHERE id = :id AND isDeleted = 0")
     suspend fun getCustomerById(id: String): CustomerEntity?
 
@@ -24,6 +27,9 @@ interface CustomerDao {
     @Query("UPDATE customers SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeleteCustomer(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
 
+    @Query("UPDATE customers SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restoreCustomer(id: String, updatedAt: Long = System.currentTimeMillis())
+
     @Query("SELECT COUNT(*) FROM customers WHERE isDeleted = 0")
     fun getCustomerCount(): Flow<Int>
 
@@ -38,9 +44,42 @@ interface CustomerDao {
 }
 
 @Dao
+interface ProjectStageDao {
+    @Query("SELECT * FROM project_stages WHERE isDeleted = 0 ORDER BY displayOrder ASC")
+    fun getAllStages(): Flow<List<ProjectStageEntity>>
+
+    @Query("SELECT * FROM project_stages WHERE isDeleted = 0 ORDER BY displayOrder ASC")
+    suspend fun getAllStagesOnce(): List<ProjectStageEntity>
+
+    @Query("SELECT * FROM project_stages WHERE id = :id AND isDeleted = 0")
+    suspend fun getStageById(id: String): ProjectStageEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStage(stage: ProjectStageEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStages(stages: List<ProjectStageEntity>)
+
+    @Update
+    suspend fun updateStage(stage: ProjectStageEntity)
+
+    @Update
+    suspend fun updateStages(stages: List<ProjectStageEntity>)
+
+    @Query("UPDATE project_stages SET isDeleted = 1, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun softDeleteStage(id: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("SELECT COUNT(*) FROM project_stages WHERE isDeleted = 0")
+    suspend fun getStageCount(): Int
+}
+
+@Dao
 interface ProjectDao {
     @Query("SELECT * FROM projects WHERE isDeleted = 0 ORDER BY updatedAt DESC")
     fun getAllProjects(): Flow<List<ProjectEntity>>
+
+    @Query("SELECT * FROM projects WHERE isDeleted = 1 ORDER BY updatedAt DESC")
+    fun getDeletedProjects(): Flow<List<ProjectEntity>>
 
     @Query("SELECT * FROM projects WHERE customerId = :customerId AND isDeleted = 0 ORDER BY updatedAt DESC")
     fun getProjectsForCustomer(customerId: String): Flow<List<ProjectEntity>>
@@ -57,8 +96,17 @@ interface ProjectDao {
     @Update
     suspend fun updateProject(project: ProjectEntity)
 
+    @Query("UPDATE projects SET stageId = :stageId, completedStageIds = :completedStageIds, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateProjectStages(id: String, stageId: String?, completedStageIds: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE projects SET status = :status, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateProjectStatus(id: String, status: String, updatedAt: Long = System.currentTimeMillis())
+
     @Query("UPDATE projects SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeleteProject(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
+
+    @Query("UPDATE projects SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restoreProject(id: String, updatedAt: Long = System.currentTimeMillis())
 
     @Query("SELECT COUNT(*) FROM projects WHERE isDeleted = 0 AND status != 'تکمیل شده' AND status != 'تسویه شده'")
     fun getActiveProjectCount(): Flow<Int>
@@ -82,6 +130,9 @@ interface ProjectDao {
     @Query("UPDATE project_specs SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeleteSpec(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
 
+    @Query("UPDATE project_specs SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restoreSpec(id: String, updatedAt: Long = System.currentTimeMillis())
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProjects(projects: List<ProjectEntity>)
 
@@ -99,6 +150,9 @@ interface ProjectDao {
 interface InvoiceDao {
     @Query("SELECT * FROM invoices WHERE isDeleted = 0 ORDER BY updatedAt DESC")
     fun getAllInvoices(): Flow<List<InvoiceEntity>>
+
+    @Query("SELECT * FROM invoices WHERE isDeleted = 1 ORDER BY updatedAt DESC")
+    fun getDeletedInvoices(): Flow<List<InvoiceEntity>>
 
     @Query("SELECT * FROM invoices WHERE projectId = :projectId AND isDeleted = 0 LIMIT 1")
     fun getInvoiceForProject(projectId: String): Flow<InvoiceEntity?>
@@ -118,6 +172,9 @@ interface InvoiceDao {
     @Query("UPDATE invoices SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeleteInvoice(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
 
+    @Query("UPDATE invoices SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restoreInvoice(id: String, updatedAt: Long = System.currentTimeMillis())
+
     // Invoice items
     @Query("SELECT * FROM invoice_items WHERE invoiceId = :invoiceId AND isDeleted = 0 ORDER BY createdAt ASC")
     fun getItemsForInvoice(invoiceId: String): Flow<List<InvoiceItemEntity>>
@@ -133,6 +190,9 @@ interface InvoiceDao {
 
     @Query("UPDATE invoice_items SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeleteInvoiceItem(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
+
+    @Query("UPDATE invoice_items SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restoreInvoiceItem(id: String, updatedAt: Long = System.currentTimeMillis())
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertInvoices(invoices: List<InvoiceEntity>)
@@ -153,6 +213,9 @@ interface FinancialDao {
     @Query("SELECT * FROM payments WHERE isDeleted = 0 ORDER BY date DESC, createdAt DESC")
     fun getAllPayments(): Flow<List<PaymentEntity>>
 
+    @Query("SELECT * FROM payments WHERE isDeleted = 1 ORDER BY date DESC, createdAt DESC")
+    fun getDeletedPayments(): Flow<List<PaymentEntity>>
+
     @Query("SELECT * FROM payments WHERE customerId = :customerId AND isDeleted = 0 ORDER BY date DESC")
     fun getPaymentsForCustomer(customerId: String): Flow<List<PaymentEntity>>
 
@@ -168,9 +231,15 @@ interface FinancialDao {
     @Query("UPDATE payments SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeletePayment(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
 
+    @Query("UPDATE payments SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restorePayment(id: String, updatedAt: Long = System.currentTimeMillis())
+
     // Checks
     @Query("SELECT * FROM checks WHERE isDeleted = 0 ORDER BY dueDate ASC")
     fun getAllChecks(): Flow<List<CheckEntity>>
+
+    @Query("SELECT * FROM checks WHERE isDeleted = 1 ORDER BY dueDate ASC")
+    fun getDeletedChecks(): Flow<List<CheckEntity>>
 
     @Query("SELECT * FROM checks WHERE customerId = :customerId AND isDeleted = 0 ORDER BY dueDate ASC")
     fun getChecksForCustomer(customerId: String): Flow<List<CheckEntity>>
@@ -187,15 +256,27 @@ interface FinancialDao {
     @Query("UPDATE checks SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeleteCheck(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
 
+    @Query("UPDATE checks SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restoreCheck(id: String, updatedAt: Long = System.currentTimeMillis())
+
     // Expenses
     @Query("SELECT * FROM expenses WHERE isDeleted = 0 ORDER BY date DESC")
     fun getAllExpenses(): Flow<List<ExpenseEntity>>
+
+    @Query("SELECT * FROM expenses WHERE isDeleted = 1 ORDER BY date DESC")
+    fun getDeletedExpenses(): Flow<List<ExpenseEntity>>
 
     @Query("SELECT * FROM expenses WHERE invoiceId = :invoiceId AND isDeleted = 0 ORDER BY date DESC")
     fun getExpensesForInvoice(invoiceId: String): Flow<List<ExpenseEntity>>
 
     @Query("SELECT * FROM expenses WHERE invoiceId = :invoiceId AND isDeleted = 0 ORDER BY date DESC")
     suspend fun getExpensesForInvoiceOnce(invoiceId: String): List<ExpenseEntity>
+
+    @Query("SELECT * FROM expenses WHERE projectId = :projectId AND isDeleted = 0 ORDER BY date DESC")
+    fun getExpensesForProject(projectId: String): Flow<List<ExpenseEntity>>
+
+    @Query("SELECT * FROM expenses WHERE projectId = :projectId AND isDeleted = 0 ORDER BY date DESC")
+    suspend fun getExpensesForProjectOnce(projectId: String): List<ExpenseEntity>
 
     @Query("SELECT * FROM expenses WHERE id = :id AND isDeleted = 0")
     suspend fun getExpenseById(id: String): ExpenseEntity?
@@ -208,6 +289,9 @@ interface FinancialDao {
 
     @Query("UPDATE expenses SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeleteExpense(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
+
+    @Query("UPDATE expenses SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restoreExpense(id: String, updatedAt: Long = System.currentTimeMillis())
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPayments(payments: List<PaymentEntity>)
@@ -233,6 +317,9 @@ interface ContractDao {
     @Query("SELECT * FROM contracts WHERE isDeleted = 0 ORDER BY updatedAt DESC")
     fun getAllContracts(): Flow<List<ContractEntity>>
 
+    @Query("SELECT * FROM contracts WHERE isDeleted = 1 ORDER BY updatedAt DESC")
+    fun getDeletedContracts(): Flow<List<ContractEntity>>
+
     @Query("SELECT * FROM contracts WHERE customerId = :customerId AND isDeleted = 0 ORDER BY updatedAt DESC")
     fun getContractsForCustomer(customerId: String): Flow<List<ContractEntity>>
 
@@ -253,6 +340,9 @@ interface ContractDao {
 
     @Query("UPDATE contracts SET isDeleted = 1, updatedAt = :updatedAt, userId = :userId WHERE id = :id")
     suspend fun softDeleteContract(id: String, updatedAt: Long = System.currentTimeMillis(), userId: String)
+
+    @Query("UPDATE contracts SET isDeleted = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restoreContract(id: String, updatedAt: Long = System.currentTimeMillis())
 
     @Query("SELECT SUM(totalAmount) FROM contracts WHERE isDeleted = 0")
     fun getTotalContractsAmount(): Flow<Long?>
