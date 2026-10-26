@@ -518,22 +518,7 @@ fun StickyBottomActionBar(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Cancel button: Left side, 1/3 width, flat without elevated background
-            OutlinedButton(
-                onClick = onCancel,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .testTag("action_bar_cancel_btn"),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Text("انصراف", style = MaterialTheme.typography.labelLarge)
-            }
-
+            
             // Save button: Right side, 2/3 width, primary color, disabled if !isDirty or !isValid
             Button(
                 onClick = onSave,
@@ -555,6 +540,23 @@ fun StickyBottomActionBar(
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            // Cancel button: Left side, 1/3 width, flat without elevated background
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .testTag("action_bar_cancel_btn"),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Text("انصراف", style = MaterialTheme.typography.labelLarge)
+            }
+
         }
     }
 }
@@ -828,14 +830,6 @@ fun AppFormBottomSheet(
             }
         )
 
-        BackHandler(enabled = true) {
-            if (currentIsDirty && currentWarnUnsaved) {
-                currentOnAttemptDismiss()
-            } else {
-                currentOnDismissRequest()
-            }
-        }
-
         ModalBottomSheet(
             onDismissRequest = {
                 if (currentIsDirty && currentWarnUnsaved) {
@@ -845,11 +839,18 @@ fun AppFormBottomSheet(
                 }
             },
             sheetState = sheetState,
+            properties = ModalBottomSheetDefaults.properties(
+                shouldDismissOnBackPress = !(currentIsDirty && currentWarnUnsaved)
+            ),
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             containerColor = MaterialTheme.colorScheme.background,
             dragHandle = { BottomSheetDefaults.DragHandle() },
             modifier = modifier.fillMaxWidth()
         ) {
+            BackHandler(enabled = currentIsDirty && currentWarnUnsaved) {
+                currentOnAttemptDismiss()
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

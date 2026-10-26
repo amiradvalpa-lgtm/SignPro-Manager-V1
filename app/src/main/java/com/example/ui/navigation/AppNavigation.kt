@@ -44,6 +44,7 @@ fun AppNavigation(viewModel: SignageViewModel) {
 
     val customers by viewModel.customers.collectAsState()
     val currencyUnit by viewModel.currencyUnit.collectAsState()
+    val warnUnsaved by viewModel.warnUnsavedChanges.collectAsState()
 
     // Global quick dialog triggers from Dashboard
     var showQuickCustomerDialog by remember { mutableStateOf(false) }
@@ -259,6 +260,7 @@ fun AppNavigation(viewModel: SignageViewModel) {
     if (showQuickCustomerDialog) {
         CustomerEditDialog(
             customer = null,
+            warnUnsavedChanges = warnUnsaved,
             onDismiss = { showQuickCustomerDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveCustomer(entity, isNew) {
@@ -272,6 +274,7 @@ fun AppNavigation(viewModel: SignageViewModel) {
         ProjectEditDialog(
             project = null,
             customers = customers,
+            warnUnsavedChanges = warnUnsaved,
             onDismiss = { showQuickProjectDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveProject(entity, isNew) {
@@ -286,6 +289,7 @@ fun AppNavigation(viewModel: SignageViewModel) {
             payment = null,
             customers = customers,
             currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsaved,
             onDismiss = { showQuickPaymentDialog = false },
             onSave = { entity, isNew ->
                 viewModel.savePayment(entity, isNew) {
@@ -300,6 +304,7 @@ fun AppNavigation(viewModel: SignageViewModel) {
             check = null,
             customers = customers,
             currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsaved,
             onDismiss = { showQuickCheckDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveCheck(entity, isNew) {

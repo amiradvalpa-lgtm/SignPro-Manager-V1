@@ -30,6 +30,7 @@ fun CustomersScreen(
 ) {
     val customers by viewModel.customers.collectAsState()
     val currencyUnit by viewModel.currencyUnit.collectAsState()
+    val warnUnsavedChanges by viewModel.warnUnsavedChanges.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedCustomerForEdit by remember { mutableStateOf<CustomerEntity?>(null) }
@@ -117,6 +118,7 @@ fun CustomersScreen(
     if (showCreateDialog) {
         CustomerEditDialog(
             customer = null,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { showCreateDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveCustomer(entity, isNew) {
@@ -129,6 +131,7 @@ fun CustomersScreen(
     selectedCustomerForEdit?.let { customer ->
         CustomerEditDialog(
             customer = customer,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { selectedCustomerForEdit = null },
             onSave = { entity, isNew ->
                 viewModel.saveCustomer(entity, isNew) {

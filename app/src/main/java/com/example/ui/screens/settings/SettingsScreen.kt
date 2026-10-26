@@ -56,28 +56,236 @@ fun SettingsScreen(
     val recentAudits by viewModel.recentAudits.collectAsState()
     val warnUnsavedChanges by viewModel.warnUnsavedChanges.collectAsState()
 
-    // Dialog states
+    // Dialog & Sheet states
     var showContractorDialog by remember { mutableStateOf(false) }
     var showUserDialog by remember { mutableStateOf(false) }
-    var showCategoryDialog by remember { mutableStateOf(false) }
-    var selectedCategoryForEdit by remember { mutableStateOf<ExpenseCategoryEntity?>(null) }
-    var categoryToDelete by remember { mutableStateOf<ExpenseCategoryEntity?>(null) }
-
-    // Project Stages dialogs
-    var showStageManagerDialog by remember { mutableStateOf(false) }
-    var selectedStageForEdit by remember { mutableStateOf<ProjectStageEntity?>(null) }
-    var showAddStageDialog by remember { mutableStateOf(false) }
-    var stageToDelete by remember { mutableStateOf<ProjectStageEntity?>(null) }
-
-    // Trash & Audits dialogs
+    var showExpenseCategoriesSheet by remember { mutableStateOf(false) }
+    var showProjectStagesSheet by remember { mutableStateOf(false) }
     var showTrashDialog by remember { mutableStateOf(false) }
     var itemToRestore by remember { mutableStateOf<TrashItem?>(null) }
     var showAuditLogsDialog by remember { mutableStateOf(false) }
+    var showBackupRestoreSheet by remember { mutableStateOf(false) }
+    var showDatabaseManagementSheet by remember { mutableStateOf(false) }
 
-    var backupToRestore by remember { mutableStateOf<BackupMetadata?>(null) }
-    var showClearSampleDialog by remember { mutableStateOf(false) }
-    var showSeedSampleDialog by remember { mutableStateOf(false) }
+    SettingsContent(
+        contractorInfo = contractorInfo,
+        currencyUnit = currencyUnit,
+        themeMode = themeMode,
+        primaryColorKey = primaryColorKey,
+        warnUnsavedChanges = warnUnsavedChanges,
+        isAuthEnabled = isAuthEnabled,
+        isBiometricEnabled = isBiometricEnabled,
+        categoriesCount = categories.size,
+        stagesCount = stages.size,
+        backupCount = backupList.size,
+        trashCount = trashItems.size,
+        auditsCount = recentAudits.size,
+        onBack = onBack,
+        onEditContractor = { showContractorDialog = true },
+        onSetCurrency = { viewModel.setCurrencyUnit(it) },
+        onSetTheme = { viewModel.setThemeMode(it) },
+        onSetPrimaryColor = { viewModel.setPrimaryColorKey(it) },
+        onSetWarnUnsaved = { viewModel.setWarnUnsavedChanges(it) },
+        onOpenExpenseCategories = { showExpenseCategoriesSheet = true },
+        onOpenProjectStages = { showProjectStagesSheet = true },
+        onOpenTrash = { showTrashDialog = true },
+        onOpenAuditLogs = { showAuditLogsDialog = true },
+        onTogglePin = { checked ->
+            val user = currentUser
+            viewModel.updateSecuritySettings(
+                pinEnabled = checked,
+                biometricEnabled = isBiometricEnabled,
+                newPasswordRaw = null,
+                hint = user?.securityHint ?: "1234",
+                fullName = user?.fullName ?: "امیرحسین حسنخانی",
+                username = user?.username ?: "admin"
+            )
+        },
+        onToggleBiometric = { checked ->
+            val user = currentUser
+            viewModel.updateSecuritySettings(
+                pinEnabled = isAuthEnabled,
+                biometricEnabled = checked,
+                newPasswordRaw = null,
+                hint = user?.securityHint ?: "1234",
+                fullName = user?.fullName ?: "امیرحسین حسنخانی",
+                username = user?.username ?: "admin"
+            )
+        },
+        onEditUserSecurity = { showUserDialog = true },
+        onOpenBackupRestore = { showBackupRestoreSheet = true },
+        onOpenDatabaseManagement = { showDatabaseManagementSheet = true }
+    )
 
+    // Contractor Info Dialog
+    if (showContractorDialog) {
+        ContractorEditDialog(
+            currentInfo = contractorInfo,
+            warnUnsavedChanges = warnUnsavedChanges,
+            onDismiss = { showContractorDialog = false },
+            onSave = { updated ->
+                viewModel.updateContractorInfo(updated)
+                showContractorDialog = false
+                Toast.makeText(context, "مشخصات تابلوسازی ذخیره شد.", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // User Profile Dialog
+    if (showUserDialog) {
+        UserProfileDialog(
+            currentUser = currentUser,
+            warnUnsavedChanges = warnUnsavedChanges,
+            onDismiss = { showUserDialog = false },
+            onSave = { name, user, newPass, hint ->
+                viewModel.updateSecuritySettings(
+                    pinEnabled = isAuthEnabled,
+                    biometricEnabled = isBiometricEnabled,
+                    newPasswordRaw = newPass,
+                    hint = hint,
+                    fullName = name,
+                    username = user
+                )
+                showUserDialog = false
+                Toast.makeText(context, "اطلاعات امنیتی بروزرسانی شد.", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // Expense Categories Settings Sheet
+    if (showExpenseCategoriesSheet) {
+        ExpenseCategoriesSettingsSheet(
+            categories = categories,
+            currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsavedChanges,
+            onDismiss = { showExpenseCategoriesSheet = false },
+            onSaveCategory = { entity, isNew ->
+                viewModel.saveExpenseCategory(entity, isNew) {}
+            },
+            onDeleteCategory = { entity ->
+                viewModel.deleteExpenseCategory(entity) {}
+            }
+        )
+    }
+
+    // Project Stages Settings Sheet
+    if (showProjectStagesSheet) {
+        ProjectStagesSettingsSheet(
+            stages = stages,
+            warnUnsavedChanges = warnUnsavedChanges,
+            onDismiss = { showProjectStagesSheet = false },
+            onSaveStage = { entity, isNew ->
+                viewModel.saveStage(entity, isNew) {}
+            },
+            onDeleteStage = { entity ->
+                viewModel.deleteStage(entity) {}
+            },
+            onReorderStages = { reordered ->
+                viewModel.reorderStages(reordered)
+            }
+        )
+    }
+
+    // Trash Dialog
+    if (showTrashDialog) {
+        TrashDialog(
+            trashItems = trashItems,
+            onDismiss = { showTrashDialog = false },
+            onRequestRestore = { item -> itemToRestore = item }
+        )
+    }
+
+    // Pre-restore confirmation dialog (Rule: confirm before restore)
+    DeleteConfirmationDialog(
+        show = itemToRestore != null,
+        title = "تأیید بازیابی از سطل زباله",
+        message = "آیا از بازیابی «${itemToRestore?.title}» (${itemToRestore?.categoryLabel}) به فهرست فعال اطمینان دارید؟",
+        confirmButtonText = "بازیابی",
+        onConfirm = {
+            itemToRestore?.let { itm ->
+                viewModel.restoreTrashItem(itm) {
+                    itemToRestore = null
+                    Toast.makeText(context, "با موفقیت بازیابی شد.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        },
+        onDismiss = { itemToRestore = null }
+    )
+
+    // Audit Logs Dialog
+    if (showAuditLogsDialog) {
+        AuditLogsDialog(
+            logs = recentAudits,
+            onDismiss = { showAuditLogsDialog = false }
+        )
+    }
+
+    // Backup & Restore Sheet
+    if (showBackupRestoreSheet) {
+        BackupRestoreSettingsSheet(
+            backupList = backupList,
+            onDismiss = { showBackupRestoreSheet = false },
+            onCreateBackup = {
+                viewModel.performBackup { success, msg ->
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
+            },
+            onRestoreBackup = { b ->
+                viewModel.performRestore(b.filePath) { success, msg ->
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
+            }
+        )
+    }
+
+    // Database Management Sheet
+    if (showDatabaseManagementSheet) {
+        DatabaseManagementSettingsSheet(
+            onDismiss = { showDatabaseManagementSheet = false },
+            onClearSampleData = {
+                viewModel.clearSampleData {
+                    Toast.makeText(context, "اطلاعات فرضی با موفقیت پاک شد و دیتابیس آماده کار است.", Toast.LENGTH_LONG).show()
+                }
+            },
+            onSeedSampleData = {
+                viewModel.seedSampleData {
+                    Toast.makeText(context, "اطلاعات فرضی تابلوسازی با موفقیت بارگذاری شد.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SettingsContent(
+    contractorInfo: ContractorInfo,
+    currencyUnit: String,
+    themeMode: String,
+    primaryColorKey: String,
+    warnUnsavedChanges: Boolean,
+    isAuthEnabled: Boolean,
+    isBiometricEnabled: Boolean,
+    categoriesCount: Int,
+    stagesCount: Int,
+    backupCount: Int,
+    trashCount: Int,
+    auditsCount: Int,
+    onBack: () -> Unit,
+    onEditContractor: () -> Unit,
+    onSetCurrency: (String) -> Unit,
+    onSetTheme: (String) -> Unit,
+    onSetPrimaryColor: (String) -> Unit,
+    onSetWarnUnsaved: (Boolean) -> Unit,
+    onOpenExpenseCategories: () -> Unit,
+    onOpenProjectStages: () -> Unit,
+    onOpenTrash: () -> Unit,
+    onOpenAuditLogs: () -> Unit,
+    onTogglePin: (Boolean) -> Unit,
+    onToggleBiometric: (Boolean) -> Unit,
+    onEditUserSecurity: () -> Unit,
+    onOpenBackupRestore: () -> Unit,
+    onOpenDatabaseManagement: () -> Unit
+) {
     Scaffold(
         topBar = {
             AppTopBar(
@@ -113,7 +321,7 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("کارت: ${contractorInfo.cardNumber} (بانک ملی)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             }
-                            IconButton(onClick = { showContractorDialog = true }, modifier = Modifier.testTag("edit_contractor_btn")) {
+                            IconButton(onClick = onEditContractor, modifier = Modifier.testTag("edit_contractor_btn")) {
                                 Icon(Icons.Default.Edit, contentDescription = "ویرایش مشخصات", tint = MaterialTheme.colorScheme.primary)
                             }
                         }
@@ -137,12 +345,12 @@ fun SettingsScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(
                                     selected = currencyUnit == "TOMAN",
-                                    onClick = { viewModel.setCurrencyUnit("TOMAN") },
+                                    onClick = { onSetCurrency("TOMAN") },
                                     label = { Text("تومان") }
                                 )
                                 FilterChip(
                                     selected = currencyUnit == "RIAL",
-                                    onClick = { viewModel.setCurrencyUnit("RIAL") },
+                                    onClick = { onSetCurrency("RIAL") },
                                     label = { Text("ریال") }
                                 )
                             }
@@ -160,17 +368,17 @@ fun SettingsScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 FilterChip(
                                     selected = themeMode == "SYSTEM",
-                                    onClick = { viewModel.setThemeMode("SYSTEM") },
+                                    onClick = { onSetTheme("SYSTEM") },
                                     label = { Text("سیستم") }
                                 )
                                 FilterChip(
                                     selected = themeMode == "LIGHT",
-                                    onClick = { viewModel.setThemeMode("LIGHT") },
+                                    onClick = { onSetTheme("LIGHT") },
                                     label = { Text("روشن") }
                                 )
                                 FilterChip(
                                     selected = themeMode == "DARK",
-                                    onClick = { viewModel.setThemeMode("DARK") },
+                                    onClick = { onSetTheme("DARK") },
                                     label = { Text("تاریک") }
                                 )
                             }
@@ -200,7 +408,7 @@ fun SettingsScreen(
                                         border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface) else null,
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(12.dp))
-                                            .clickable { viewModel.setPrimaryColorKey(key) }
+                                            .clickable { onSetPrimaryColor(key) }
                                     ) {
                                         Text(
                                             text = label,
@@ -228,7 +436,7 @@ fun SettingsScreen(
                             }
                             Switch(
                                 checked = warnUnsavedChanges,
-                                onCheckedChange = { viewModel.setWarnUnsavedChanges(it) },
+                                onCheckedChange = onSetWarnUnsaved,
                                 modifier = Modifier.testTag("switch_warn_unsaved")
                             )
                         }
@@ -236,158 +444,74 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 3: Expense Categories Management
+            // Section 3: Workshop Management (Categories & Stages) - Accordion / Row navigation per Agreement 1.1
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("مدیریت عنوان هزینه‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { showCategoryDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("افزودن عنوان")
-                    }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
+                Text("مدیریت کارگاه و تابلوسازی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
                 AppCard {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        categories.forEach { cat ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(cat.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                    if (cat.defaultAmount > 0) {
-                                        Text("مبلغ پیش‌فرض: ${FormatUtils.formatCurrency(cat.defaultAmount, currencyUnit)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                                Row {
-                                    IconButton(onClick = { selectedCategoryForEdit = cat }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Edit, contentDescription = "ویرایش", modifier = Modifier.size(16.dp))
-                                    }
-                                    IconButton(onClick = { categoryToDelete = cat }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            }
-                            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                        }
-                    }
-                }
-            }
-
-            // Section: Project Stages Management
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("مدیریت مراحل پروژه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { showAddStageDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("افزودن مرحله")
-                    }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                AppCard {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        val sortedStages = stages.sortedBy { it.displayOrder }
-                        if (sortedStages.isEmpty()) {
-                            Text("مرحله‌ای تعریف نشده است", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
-                        } else {
-                            sortedStages.forEachIndexed { index, stage ->
-                                val stageColor = try {
-                                    Color(android.graphics.Color.parseColor(stage.colorHex))
-                                } catch (_: Exception) {
-                                    MaterialTheme.colorScheme.primary
-                                }
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // Expense Categories
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenExpenseCategories() }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.size(38.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(14.dp)
-                                                .clip(CircleShape)
-                                                .background(stageColor)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "${stage.displayOrder}. ${stage.title}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        // Move up button
-                                        IconButton(
-                                            onClick = {
-                                                if (index > 0) {
-                                                    val mutable = sortedStages.toMutableList()
-                                                    val prev = mutable[index - 1]
-                                                    mutable[index - 1] = stage
-                                                    mutable[index] = prev
-                                                    viewModel.reorderStages(mutable)
-                                                }
-                                            },
-                                            enabled = index > 0,
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "انتقال به بالا", modifier = Modifier.size(20.dp))
-                                        }
-
-                                        // Move down button
-                                        IconButton(
-                                            onClick = {
-                                                if (index < sortedStages.size - 1) {
-                                                    val mutable = sortedStages.toMutableList()
-                                                    val next = mutable[index + 1]
-                                                    mutable[index + 1] = stage
-                                                    mutable[index] = next
-                                                    viewModel.reorderStages(mutable)
-                                                }
-                                            },
-                                            enabled = index < sortedStages.size - 1,
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "انتقال به پایین", modifier = Modifier.size(20.dp))
-                                        }
-
-                                        IconButton(onClick = { selectedStageForEdit = stage }, modifier = Modifier.size(32.dp)) {
-                                            Icon(Icons.Default.Edit, contentDescription = "ویرایش", modifier = Modifier.size(16.dp))
-                                        }
-                                        IconButton(onClick = { stageToDelete = stage }, modifier = Modifier.size(32.dp)) {
-                                            Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                        }
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Category, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                     }
                                 }
-                                if (index < sortedStages.size - 1) {
-                                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("مدیریت عنوان هزینه‌ها", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("پیکربندی عناوین هزینه‌های کارگاهی و مبالغ پیش‌فرض ($categoriesCount عنوان)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
+                            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+
+                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                        // Project Stages
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenProjectStages() }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Timeline, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("مدیریت مراحل پروژه", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("تنظیم مراحل پیشرفت کارگاه، ترتیب و نشانگرهای رنگی ($stagesCount مرحله)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
 
-            // Section: Trash & Activity Log
+            // Section 4: Trash & Activity Log
             item {
                 Text("سطل زباله و سابقه فعالیت‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -397,7 +521,7 @@ fun SettingsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { showTrashDialog = true }
+                                .clickable { onOpenTrash() }
                                 .padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -415,7 +539,7 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text("سطل زباله", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                    Text("مشاهده و بازیابی موارد حذف‌شده (${trashItems.size} مورد)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("مشاهده و بازیابی موارد حذف‌شده ($trashCount مورد)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                             Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -423,11 +547,11 @@ fun SettingsScreen(
 
                         Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-                        // Audit Log Option (Moved from Dashboard)
+                        // Audit Log Option
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { showAuditLogsDialog = true }
+                                .clickable { onOpenAuditLogs() }
                                 .padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -445,7 +569,7 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text("سابقه فعالیت‌ها و رویدادها", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                    Text("مشاهده آخرین تغییرات و ثبت اطلاعات (${recentAudits.size} رویداد)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("مشاهده آخرین تغییرات و ثبت اطلاعات ($auditsCount رویداد)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                             Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -454,7 +578,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 4: Security & User Profile (PIN / Biometric)
+            // Section 5: Security & User Profile (PIN / Biometric)
             item {
                 Text("امنیت و کنترل دسترسی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -471,17 +595,7 @@ fun SettingsScreen(
                             }
                             Switch(
                                 checked = isAuthEnabled,
-                                onCheckedChange = { checked ->
-                                    val user = currentUser
-                                    viewModel.updateSecuritySettings(
-                                        pinEnabled = checked,
-                                        biometricEnabled = isBiometricEnabled,
-                                        newPasswordRaw = null,
-                                        hint = user?.securityHint ?: "1234",
-                                        fullName = user?.fullName ?: "امیرحسین حسنخانی",
-                                        username = user?.username ?: "admin"
-                                    )
-                                }
+                                onCheckedChange = onTogglePin
                             )
                         }
 
@@ -498,17 +612,7 @@ fun SettingsScreen(
                                 }
                                 Switch(
                                     checked = isBiometricEnabled,
-                                    onCheckedChange = { checked ->
-                                        val user = currentUser
-                                        viewModel.updateSecuritySettings(
-                                            pinEnabled = isAuthEnabled,
-                                            biometricEnabled = checked,
-                                            newPasswordRaw = null,
-                                            hint = user?.securityHint ?: "1234",
-                                            fullName = user?.fullName ?: "امیرحسین حسنخانی",
-                                            username = user?.username ?: "admin"
-                                        )
-                                    }
+                                    onCheckedChange = onToggleBiometric
                                 )
                             }
                         }
@@ -516,7 +620,7 @@ fun SettingsScreen(
                         Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                         Button(
-                            onClick = { showUserDialog = true },
+                            onClick = onEditUserSecurity,
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth().testTag("edit_security_profile_btn")
                         ) {
@@ -528,103 +632,68 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 5: Backup & Restore
+            // Section 6: Backup & Database Management - Row navigation per Agreement 1.1
             item {
-                Text("پشتیبان‌گیری و بازیابی اطلاعات (Backup / Restore)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("پشتیبان‌گیری و پایگاه داده", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
                 AppCard {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = "پشتیبان‌گیری خودکار اطلاعات در پوشه داخلی گوشی با ساختار استاندارد JSON جهت جلوگیری از تخریب یا از دست رفتن اطلاعات.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Button(
-                            onClick = {
-                                viewModel.performBackup { success, msg ->
-                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                }
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth().testTag("create_backup_btn")
+                        // Backup & Restore
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenBackupRestore() }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("ایجاد فایل پشتیبان جدید (هم‌اکنون)")
-                        }
-
-                        if (backupList.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text("لیست فایل‌های پشتیبان قابل بازیابی:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            backupList.forEach { bkp ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Surface(
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.size(38.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(10.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(bkp.fileName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                                            Text("حجم: ${bkp.fileSizeFormatted}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        FilledTonalButton(
-                                            onClick = { backupToRestore = bkp },
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text("بازیابی", style = MaterialTheme.typography.labelSmall)
-                                        }
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                     }
                                 }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("پشتیبان‌گیری و بازیابی اطلاعات", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("تهیه فایل پشتیبان JSON و بازیابی اطلاعات کارگاه ($backupCount فایل موجود)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
+                            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                    }
-                }
-            }
 
-            // Section: Database & Sample Data Management
-            item {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("مدیریت دیتابیس و داده‌های فرضی (کارگاه)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                AppCard {
-                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("وضعیت دیتابیس و آماده‌سازی برای کار واقعی", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        }
-                        Text(
-                            text = "نرم‌افزار با اطلاعات فرضی جامع (مشتریان، سفارشات چلنیوم و کامپوزیت، فاکتورها، چک‌ها و قراردادها) راه‌اندازی شده است تا بتوانید گزارشات و محیط برنامه را تست کنید.\nبرای شروع کار واقعی، با زدن دکمه زیر اطلاعات فرضی پاک شده و دیتابیس کاملاً آماده ثبت اطلاعات واقعی شما می‌گردد.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-                        Button(
-                            onClick = { showClearSampleDialog = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth().testTag("clear_sample_data_btn")
+                        // Database & Sample Data
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenDatabaseManagement() }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("پاک‌سازی اطلاعات فرضی و راه‌اندازی کارگاه")
-                        }
-
-                        OutlinedButton(
-                            onClick = { showSeedSampleDialog = true },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth().testTag("seed_sample_data_btn")
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("بارگذاری مجدد اطلاعات نمونه کارگاه")
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("مدیریت دیتابیس و داده‌های فرضی", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("پاک‌سازی اطلاعات فرضی و راه‌اندازی برای کار واقعی کارگاه", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -634,201 +703,6 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(40.dp))
             }
         }
-    }
-
-    // Contractor Info Dialog
-    if (showContractorDialog) {
-        ContractorEditDialog(
-            currentInfo = contractorInfo,
-            onDismiss = { showContractorDialog = false },
-            onSave = { updated ->
-                viewModel.updateContractorInfo(updated)
-                showContractorDialog = false
-                Toast.makeText(context, "مشخصات تابلوسازی ذخیره شد.", Toast.LENGTH_SHORT).show()
-            }
-        )
-    }
-
-    // User Profile Dialog
-    if (showUserDialog) {
-        UserProfileDialog(
-            currentUser = currentUser,
-            onDismiss = { showUserDialog = false },
-            onSave = { name, user, newPass, hint ->
-                viewModel.updateSecuritySettings(
-                    pinEnabled = isAuthEnabled,
-                    biometricEnabled = isBiometricEnabled,
-                    newPasswordRaw = newPass,
-                    hint = hint,
-                    fullName = name,
-                    username = user
-                )
-                showUserDialog = false
-                Toast.makeText(context, "اطلاعات امنیتی بروزرسانی شد.", Toast.LENGTH_SHORT).show()
-            }
-        )
-    }
-
-    // Expense Category Dialogs
-    if (showCategoryDialog) {
-        ExpenseCategoryDialog(
-            category = null,
-            currencyUnit = currencyUnit,
-            onDismiss = { showCategoryDialog = false },
-            onSave = { entity, isNew ->
-                viewModel.saveExpenseCategory(entity, isNew) {
-                    showCategoryDialog = false
-                }
-            }
-        )
-    }
-
-    selectedCategoryForEdit?.let { cat ->
-        ExpenseCategoryDialog(
-            category = cat,
-            currencyUnit = currencyUnit,
-            onDismiss = { selectedCategoryForEdit = null },
-            onSave = { entity, isNew ->
-                viewModel.saveExpenseCategory(entity, isNew) {
-                    selectedCategoryForEdit = null
-                }
-            }
-        )
-    }
-
-    DeleteConfirmationDialog(
-        show = categoryToDelete != null,
-        title = "حذف عنوان هزینه",
-        message = "آیا از حذف عنوان هزینه «${categoryToDelete?.title}» اطمینان دارید؟",
-        onConfirm = {
-            categoryToDelete?.let { cat ->
-                viewModel.deleteExpenseCategory(cat) {
-                    categoryToDelete = null
-                }
-            }
-        },
-        onDismiss = { categoryToDelete = null }
-    )
-
-    // Restore Confirmation Dialog
-    DeleteConfirmationDialog(
-        show = backupToRestore != null,
-        title = "تأیید بازیابی اطلاعات (Restore)",
-        message = "هشدار: با بازیابی این فایل، داده‌های پایگاه داده با اطلاعات نسخه پشتیبان همگام خواهند شد. آیا ادامه می‌دهید؟",
-        itemDetail = backupToRestore?.fileName,
-        onConfirm = {
-            backupToRestore?.let { b ->
-                viewModel.performRestore(b.filePath) { success, msg ->
-                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                    backupToRestore = null
-                }
-            }
-        },
-        onDismiss = { backupToRestore = null }
-    )
-
-    // Clear Sample Data Dialog
-    DeleteConfirmationDialog(
-        show = showClearSampleDialog,
-        title = "پاک‌سازی اطلاعات فرضی و راه‌اندازی کارگاه",
-        message = "آیا مطمئن هستید؟ تمامی داده‌های تستی شامل مشتریان، پروژه‌ها، فاکتورها، چک‌ها و قراردادهای فرضی حذف خواهند شد و دیتابیس برای ورود اطلاعات واقعی کارگاه آماده می‌شود.\n(اطلاعات حساب کاربری، مشخصات کارگاه و دسته‌های هزینه محفوظ می‌مانند)",
-        onConfirm = {
-            viewModel.clearSampleData {
-                showClearSampleDialog = false
-                Toast.makeText(context, "اطلاعات فرضی با موفقیت پاک شد و دیتابیس آماده کار است.", Toast.LENGTH_LONG).show()
-            }
-        },
-        onDismiss = { showClearSampleDialog = false }
-    )
-
-    // Seed Sample Data Dialog
-    DeleteConfirmationDialog(
-        show = showSeedSampleDialog,
-        title = "بارگذاری مجدد اطلاعات نمونه",
-        message = "آیا می‌خواهید داده‌های فرضی تابلوسازی (۳ مشتری، ۳ سفارش، فاکتورها، هزینه‌ها و چک‌ها) مجدداً در دیتابیس بارگذاری شوند؟",
-        onConfirm = {
-            viewModel.seedSampleData {
-                showSeedSampleDialog = false
-                Toast.makeText(context, "اطلاعات فرضی تابلوسازی با موفقیت بارگذاری شد.", Toast.LENGTH_SHORT).show()
-            }
-        },
-        onDismiss = { showSeedSampleDialog = false }
-    )
-
-    // Stage Dialogs
-    if (showAddStageDialog) {
-        val nextOrder = (stages.maxOfOrNull { it.displayOrder } ?: 0) + 1
-        StageEditDialog(
-            stage = null,
-            nextOrder = nextOrder,
-            onDismiss = { showAddStageDialog = false },
-            onSave = { entity, isNew ->
-                viewModel.saveStage(entity, isNew) {
-                    showAddStageDialog = false
-                }
-            }
-        )
-    }
-
-    selectedStageForEdit?.let { stg ->
-        StageEditDialog(
-            stage = stg,
-            nextOrder = stg.displayOrder,
-            onDismiss = { selectedStageForEdit = null },
-            onSave = { entity, isNew ->
-                viewModel.saveStage(entity, isNew) {
-                    selectedStageForEdit = null
-                }
-            }
-        )
-    }
-
-    DeleteConfirmationDialog(
-        show = stageToDelete != null,
-        title = "حذف مرحله کارگاهی",
-        message = "آیا از حذف مرحله «${stageToDelete?.title}» اطمینان دارید؟",
-        onConfirm = {
-            stageToDelete?.let { stg ->
-                viewModel.deleteStage(stg) {
-                    stageToDelete = null
-                }
-            }
-        },
-        onDismiss = { stageToDelete = null }
-    )
-
-    // Trash Dialog
-    if (showTrashDialog) {
-        TrashDialog(
-            trashItems = trashItems,
-            onDismiss = { showTrashDialog = false },
-            onRequestRestore = { item -> itemToRestore = item }
-        )
-    }
-
-    // Pre-restore confirmation dialog (Rule: confirm before restore)
-    DeleteConfirmationDialog(
-        show = itemToRestore != null,
-        title = "تأیید بازیابی از سطل زباله",
-        message = "آیا از بازیابی «${itemToRestore?.title}» (${itemToRestore?.categoryLabel}) به فهرست فعال اطمینان دارید؟",
-        confirmButtonText = "بازیابی",
-        onConfirm = {
-            itemToRestore?.let { itm ->
-                viewModel.restoreTrashItem(itm) {
-                    itemToRestore = null
-                    Toast.makeText(context, "با موفقیت بازیابی شد.", Toast.LENGTH_SHORT).show()
-                }
-            }
-        },
-        onDismiss = { itemToRestore = null }
-    )
-
-    // Audit Logs Dialog
-    if (showAuditLogsDialog) {
-        AuditLogsDialog(
-            logs = recentAudits,
-            onDismiss = { showAuditLogsDialog = false }
-        )
     }
 }
 
@@ -1575,5 +1449,50 @@ fun StageEditDialogPreview() {
         }
     }
 }
+
+@Preview(name = "Settings Screen Full Preview", showBackground = true)
+@Composable
+fun SettingsScreenPreview() {
+    MyApplicationTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            SettingsContent(
+                contractorInfo = ContractorInfo(
+                    name = "امیرحسین حسنخانی",
+                    businessName = "تابلوسازی تبلیغاتی آلپا",
+                    address = "فردوسی ۲، نبش خیابان فاضل",
+                    phone = "09144862950",
+                    cardNumber = "6037998209583854"
+                ),
+                currencyUnit = "TOMAN",
+                themeMode = "SYSTEM",
+                primaryColorKey = "AMBER",
+                warnUnsavedChanges = true,
+                isAuthEnabled = true,
+                isBiometricEnabled = false,
+                categoriesCount = 8,
+                stagesCount = 5,
+                backupCount = 3,
+                trashCount = 2,
+                auditsCount = 14,
+                onBack = {},
+                onEditContractor = {},
+                onSetCurrency = {},
+                onSetTheme = {},
+                onSetPrimaryColor = {},
+                onSetWarnUnsaved = {},
+                onOpenExpenseCategories = {},
+                onOpenProjectStages = {},
+                onOpenTrash = {},
+                onOpenAuditLogs = {},
+                onTogglePin = {},
+                onToggleBiometric = {},
+                onEditUserSecurity = {},
+                onOpenBackupRestore = {},
+                onOpenDatabaseManagement = {}
+            )
+        }
+    }
+}
+
 
 

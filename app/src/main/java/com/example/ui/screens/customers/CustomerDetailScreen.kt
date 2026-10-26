@@ -35,6 +35,7 @@ fun CustomerDetailScreen(
     val contracts by viewModel.repository.getContractsForCustomer(customerId).collectAsState(initial = emptyList())
     val summary by viewModel.getCustomerFinancialSummary(customerId).collectAsState(initial = null)
     val currencyUnit by viewModel.currencyUnit.collectAsState()
+    val warnUnsaved by viewModel.warnUnsavedChanges.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("پروژه‌ها", "فاکتور و قرارداد", "پرداخت‌ها", "چک‌ها", "تراز مالی")
@@ -372,6 +373,7 @@ fun CustomerDetailScreen(
     if (showEditDialog && customer != null) {
         CustomerEditDialog(
             customer = customer,
+            warnUnsavedChanges = warnUnsaved,
             onDismiss = { showEditDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveCustomer(entity, isNew) {

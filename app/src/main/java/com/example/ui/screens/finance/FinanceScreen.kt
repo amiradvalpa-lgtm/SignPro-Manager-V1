@@ -39,6 +39,7 @@ fun FinanceScreen(
     val contracts by viewModel.contracts.collectAsState()
     val categories by viewModel.expenseCategories.collectAsState()
     val currencyUnit by viewModel.currencyUnit.collectAsState()
+    val warnUnsavedChanges by viewModel.warnUnsavedChanges.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("دریافت از مشتری", "پرداخت به مشتری", "چک‌ها", "هزینه‌های کارگاه", "گزارش مالی")
@@ -520,6 +521,7 @@ fun FinanceScreen(
             initialType = paymentDialogType,
             hideTypeSelector = true,
             currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { showPaymentDialog = false },
             onSave = { entity, isNew ->
                 viewModel.savePayment(entity, isNew) {
@@ -536,6 +538,7 @@ fun FinanceScreen(
             initialType = pay.type,
             hideTypeSelector = true,
             currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { selectedPaymentForEdit = null },
             onSave = { entity, isNew ->
                 viewModel.savePayment(entity, isNew) {
@@ -565,6 +568,7 @@ fun FinanceScreen(
             check = null,
             customers = customers,
             currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { showCheckDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveCheck(entity, isNew) {
@@ -579,6 +583,7 @@ fun FinanceScreen(
             check = chk,
             customers = customers,
             currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { selectedCheckForEdit = null },
             onSave = { entity, isNew ->
                 viewModel.saveCheck(entity, isNew) {
@@ -608,6 +613,7 @@ fun FinanceScreen(
             expense = null,
             categories = categories,
             currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { showExpenseDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveExpense(entity, isNew) {
@@ -633,6 +639,7 @@ fun FinanceScreen(
             expense = exp,
             categories = categories,
             currencyUnit = currencyUnit,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { selectedExpenseForEdit = null },
             onSave = { entity, isNew ->
                 viewModel.saveExpense(entity, isNew) {

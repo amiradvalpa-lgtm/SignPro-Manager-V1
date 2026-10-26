@@ -74,6 +74,18 @@
   2. جداسازی هوشمند حالت پیش‌نمایش با `LocalInspectionMode.current`: در حالت Preview، فرم مستقیماً روی یک `Surface` استاندارد با کلیه اجزای بصری، هندل کشیدن، هدر و نوار پایینی رندر می‌شود بدون فراخوانی پنجره پاپ‌آپ و بدون نیاز به امولاتور یا اکتیویتی واقعی، تا رندر پیش‌نمایش کامپوز ۱۰۰٪ پایدار و بدون ارور انجام پذیرد.
   3. حذف کدهای تکراری `BackHandler` از فرم‌های منفرد و مدیریت یکپارچه آن در `AppFormBottomSheet` به منظور حفظ اصل Single Source of Truth.
 
+#### تصمیم ADR-009: تفکیک ماژولار صفحات تنظیمات و مهار سیستماتیک رویداد Back در پنجره‌های ModalBottomSheet
+- **وضعیت:** تصویب شده
+- **مسئله:**
+  1. بسته شدن پنجره `ModalBottomSheet` هنگام فشردن کلید Back فیزیکی اندروید به دلیل مقدار پیش‌فرض `shouldDismissOnBackPress = true` در سطح دیالوگ و بسته شدن فرم پیش از نمایش هشدار تغییرات.
+  2. عدم اعمال سراسری سوییچ «هشدار تغییرات ذخیره‌نشده» به دلیل عدم پاس داده شدن فلگ از `viewModel` به دیالوگ‌های منفرد در صفحات.
+  3. تراکم گزینه‌های چندکنترلی و حجیم (مدیریت عناوین هزینه، مراحل پروژه، پشتیبان‌گیری و دیتابیس کارگاه) در LazyColumn اصلی صفحه تنظیمات بر خلاف اصل ۱.۱ سند توافقنامه.
+- **تصمیم:**
+  1. پیکربندی صریح `properties = ModalBottomSheetDefaults.properties(shouldDismissOnBackPress = !(currentIsDirty && currentWarnUnsaved))` در `AppFormBottomSheet` و قرارگیری `BackHandler` در لایه داخلی شیت، تا رویداد Back مستقیماً توسط گارد رهگیری شود و فرم هنگام نمایش هشدار باز و استوار باقی بماند.
+  2. اتصال سراسری تمام فرم‌های برنامه (`CustomersScreen`, `ProjectsScreen`, `FinanceScreen`, `SettingsScreen`, `AppNavigation`, `CustomerDetailScreen`, `ProjectDetailScreen`) به جریان `viewModel.warnUnsavedChanges`.
+  3. تفکیک بخش‌های چندکنترلی تنظیمات به شیت‌های مستقل در پکیج `com.example.ui.screens.settings` (`ExpenseCategoriesSettingsSheet`, `ProjectStagesSettingsSheet`, `BackupRestoreSettingsSheet`, `DatabaseManagementSettingsSheet`) و نمایش آنها در صفحه اصلی به صورت ردیف‌های ناوبری استاندارد با آیکون و توضیح.
+  4. تفکیک `SettingsContent` جهت ارائه پیش‌نمایش پایدار `@Preview` برای صفحه تنظیمات و تمام شیت‌های مشتق‌شده.
+
 ---
 
 ### ۳. ساختار پکیج‌ها و وظایف

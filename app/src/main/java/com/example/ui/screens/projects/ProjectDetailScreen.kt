@@ -585,10 +585,13 @@ fun ProjectDetailScreen(
         }
     }
 
+    val warnUnsaved by viewModel.warnUnsavedChanges.collectAsState()
+
     if (showProjectEditDialog && project != null) {
         ProjectEditDialog(
             project = project,
             customers = customers,
+            warnUnsavedChanges = warnUnsaved,
             onDismiss = { showProjectEditDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveProject(entity, isNew) {

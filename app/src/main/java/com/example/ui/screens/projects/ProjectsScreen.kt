@@ -25,6 +25,7 @@ fun ProjectsScreen(
 ) {
     val projects by viewModel.projects.collectAsState()
     val customers by viewModel.customers.collectAsState()
+    val warnUnsavedChanges by viewModel.warnUnsavedChanges.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatusFilter by remember { mutableStateOf("همه") }
@@ -132,6 +133,7 @@ fun ProjectsScreen(
         ProjectEditDialog(
             project = null,
             customers = customers,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { showCreateDialog = false },
             onSave = { entity, isNew ->
                 viewModel.saveProject(entity, isNew) {
@@ -145,6 +147,7 @@ fun ProjectsScreen(
         ProjectEditDialog(
             project = proj,
             customers = customers,
+            warnUnsavedChanges = warnUnsavedChanges,
             onDismiss = { selectedProjectForEdit = null },
             onSave = { entity, isNew ->
                 viewModel.saveProject(entity, isNew) {
