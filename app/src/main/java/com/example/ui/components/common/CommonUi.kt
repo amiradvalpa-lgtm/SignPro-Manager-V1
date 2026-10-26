@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -720,6 +721,9 @@ fun UnitSelectorDropdown(
 
 /**
  * استاندارد ۱.۲ و ۳ سند توافقنامه: ساختار فرم‌های مدال تمام‌عرض با اسکرول، هدر اختصاصی و تم هماهنگ
+ * - اصل طراحی ماژولار و DRY: مدیریت یکپارچه وضعیت تغییرات ذخیره‌نشده (Dirty Guard) در تمام فرم‌ها
+ * - رفع خطای رندر در Preview با تفکیک LocalInspectionMode
+ * - جلوگیری فعال از بسته شدن شیت پیش از هشدار با confirmValueChange
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -727,58 +731,174 @@ fun AppFormBottomSheet(
     title: String,
     subtitle: String? = null,
     onDismissRequest: () -> Unit,
-    sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    modifier: Modifier = Modifier,
+    isDirty: Boolean = false,
+    warnUnsavedChanges: Boolean = true,
+    onAttemptDismiss: () -> Unit = onDismissRequest,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        containerColor = MaterialTheme.colorScheme.background,
-        dragHandle = { BottomSheetDefaults.DragHandle() },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()
+    val isInspection = LocalInspectionMode.current
+
+    if (isInspection) {
+        // Compose Preview (Layoutlib / AI Studio / Android Studio) Mode:
+        // رندر مستقیم روی سرفیس جهت پیشگیری از خطای رندر پنجره‌های ModalBottomSheetPopup
+        Surface(
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            color = MaterialTheme.colorScheme.background,
+            modifier = modifier.fillMaxWidth()
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(vertical = 4.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (subtitle != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .width(32.dp)
+                            .height(4.dp),
+                        shape = RoundedCornerShape(2.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    ) {}
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (subtitle != null) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismissRequest) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "بستن",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                IconButton(onClick = onDismissRequest) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "بستن",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                content()
+            }
+        }
+    } else {
+        // Runtime Mode:
+        val currentIsDirty by rememberUpdatedState(isDirty)
+        val currentWarnUnsaved by rememberUpdatedState(warnUnsavedChanges)
+        val currentOnAttemptDismiss by rememberUpdatedState(onAttemptDismiss)
+        val currentOnDismissRequest by rememberUpdatedState(onDismissRequest)
+
+        val sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+            confirmValueChange = { targetValue ->
+                if (targetValue == SheetValue.Hidden) {
+                    if (currentIsDirty && currentWarnUnsaved) {
+                        currentOnAttemptDismiss()
+                        false // رد تغییر حالت به Hidden جهت جلوگیری از بسته شدن خودکار فرم
+                    } else {
+                        true
+                    }
+                } else {
+                    true
                 }
             }
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+        )
 
-            content()
+        BackHandler(enabled = true) {
+            if (currentIsDirty && currentWarnUnsaved) {
+                currentOnAttemptDismiss()
+            } else {
+                currentOnDismissRequest()
+            }
+        }
+
+        ModalBottomSheet(
+            onDismissRequest = {
+                if (currentIsDirty && currentWarnUnsaved) {
+                    currentOnAttemptDismiss()
+                } else {
+                    currentOnDismissRequest()
+                }
+            },
+            sheetState = sheetState,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            containerColor = MaterialTheme.colorScheme.background,
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            modifier = modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (subtitle != null) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    IconButton(onClick = {
+                        if (currentIsDirty && currentWarnUnsaved) {
+                            currentOnAttemptDismiss()
+                        } else {
+                            currentOnDismissRequest()
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "بستن",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                content()
+            }
         }
     }
 }
+

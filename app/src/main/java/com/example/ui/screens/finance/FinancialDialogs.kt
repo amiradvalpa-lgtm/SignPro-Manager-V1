@@ -82,10 +82,6 @@ fun PaymentEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         var hasError = false
         if (selectedCustomerId.isEmpty()) {
@@ -123,7 +119,10 @@ fun PaymentEditDialog(
     AppFormBottomSheet(
         title = if (isNew) "ثبت $operationName" else "ویرایش $operationName",
         subtitle = "ثبت اطلاعات تراکنش مالی و نحوه تسویه",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier
@@ -359,10 +358,6 @@ fun CheckEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         var hasError = false
         if (selectedCustomerId.isEmpty()) {
@@ -404,7 +399,10 @@ fun CheckEditDialog(
     AppFormBottomSheet(
         title = if (isNew) "ثبت چک صیادی جدید" else "ویرایش چک صیادی",
         subtitle = "ثبت مشخصات چک بانکی، شناسه صیاد و سررسید",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier
@@ -627,10 +625,6 @@ fun ExpenseEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         var hasError = false
         if (category.trim().isEmpty()) {
@@ -664,7 +658,10 @@ fun ExpenseEditDialog(
     AppFormBottomSheet(
         title = if (isNew) "ثبت هزینه جدید کارگاه" else "ویرایش هزینه کارگاه",
         subtitle = "ثبت مبالغ خریداری‌شده، کرایه‌ها، مصالح و ملزومات",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier

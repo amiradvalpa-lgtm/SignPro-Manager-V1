@@ -70,10 +70,6 @@ fun ProjectEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         var hasError = false
         if (title.trim().isEmpty()) {
@@ -106,7 +102,10 @@ fun ProjectEditDialog(
     AppFormBottomSheet(
         title = if (isNew) "تعریف پروژه جدید" else "ویرایش پروژه",
         subtitle = "اطلاعات پروژه تابلوسازی و کارفرمای مربوطه",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier

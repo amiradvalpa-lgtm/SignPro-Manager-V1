@@ -62,10 +62,6 @@ fun CustomerEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         var hasError = false
         if (name.trim().isEmpty()) {
@@ -99,7 +95,10 @@ fun CustomerEditDialog(
     AppFormBottomSheet(
         title = if (isNew) "ثبت مشتری جدید" else "ویرایش اطلاعات مشتری",
         subtitle = "مشخصات هویتی و اطلاعات تماس طرف حساب",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier

@@ -869,10 +869,6 @@ fun ContractorEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         onSave(
             currentInfo.copy(
@@ -891,7 +887,10 @@ fun ContractorEditDialog(
     AppFormBottomSheet(
         title = "مشخصات پیمانکار و کارگاه",
         subtitle = "اطلاعات ثبتی، نشانی کارگاه و شماره حساب‌های بانکی",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier
@@ -965,10 +964,6 @@ fun UserProfileDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         onSave(
             fullName.trim(),
@@ -981,7 +976,10 @@ fun UserProfileDialog(
     AppFormBottomSheet(
         title = "تنظیمات رمز عبور و پروفایل",
         subtitle = "مدیریت حساب کاربری ادمین و راهنمای یادآوری رمز",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier
@@ -1067,10 +1065,6 @@ fun ExpenseCategoryDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         if (title.trim().isEmpty()) {
             titleError = "عنوان هزینه الزامی است."
@@ -1092,7 +1086,10 @@ fun ExpenseCategoryDialog(
     AppFormBottomSheet(
         title = if (isNew) "افزودن عنوان هزینه جدید" else "ویرایش عنوان هزینه",
         subtitle = "تعریف عناوین پرکاربرد هزینه‌های کارگاهی و مبلغ پیش‌فرض",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier
@@ -1188,10 +1185,6 @@ fun StageEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         if (title.trim().isEmpty()) {
             titleError = "عنوان مرحله الزامی است."
@@ -1212,7 +1205,10 @@ fun StageEditDialog(
     AppFormBottomSheet(
         title = if (isNew) "افزودن مرحله جدید" else "ویرایش مرحله کارگاهی",
         subtitle = "نام مرحله و نشانگر رنگی در پرونده پروژه",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier

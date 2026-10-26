@@ -90,10 +90,6 @@ fun InvoiceItemEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     val executeSave = {
         var hasError = false
         if (serviceType.trim().isEmpty()) {
@@ -137,7 +133,10 @@ fun InvoiceItemEditDialog(
     AppFormBottomSheet(
         title = if (isNew) "افزودن ردیف فاکتور" else "ویرایش ردیف فاکتور",
         subtitle = "تعیین کالا، خدمات، متراژ، قیمت واحد و محاسبه خودکار",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier

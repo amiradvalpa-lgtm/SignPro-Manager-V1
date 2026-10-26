@@ -110,10 +110,6 @@ fun SpecEditDialog(
         }
     }
 
-    BackHandler(enabled = true) {
-        attemptDismiss()
-    }
-
     // Android zero-permission Photo Picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)
@@ -200,7 +196,10 @@ fun SpecEditDialog(
     AppFormBottomSheet(
         title = if (isNew) "افزودن مشخصات فنی تابلو" else "ویرایش مشخصات تابلو",
         subtitle = "تعیین متریال، ابعاد، پیوست‌های طرح و جزئیات ساخت",
-        onDismissRequest = attemptDismiss
+        onDismissRequest = onDismiss,
+        isDirty = isDirty,
+        warnUnsavedChanges = warnUnsavedChanges,
+        onAttemptDismiss = attemptDismiss
     ) {
         Column(
             modifier = Modifier
